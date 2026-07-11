@@ -1,0 +1,291 @@
+%% ============================================================
+%%  Chapter 3 — Literature Review
+%%  NOTE: This chapter will be continuously expanded as the
+%%  literature review progresses. Sections are pre-structured
+%%  to guide the writing process.
+%% ============================================================
+\chapter{Literature Review}
+\label{ch:literature}
+
+\section{Overview}
+\label{sec:lit_overview}
+
+This chapter reviews existing research across four interconnected domains that underpin
+this project: (1) eBPF-based network security and observability, (2) DDoS detection
+using machine learning, (3) graph-based anomaly detection for network security, and
+(4) security in Kubernetes and microservice environments. The review identifies
+limitations in existing approaches and establishes the specific research gap that
+motivates the proposed framework.
+
+The literature was sourced from IEEE Xplore, ACM Digital Library, USENIX, arXiv, and
+Google Scholar. Search queries included: \textit{``eBPF security''}, \textit{``eBPF
+intrusion detection''}, \textit{``graph neural network DDoS detection''}, \textit{``Kubernetes
+network security''}, \textit{``XDP DDoS mitigation''}, and \textit{``graph anomaly detection
+network intrusion''}, filtered to publications from 2018--2025.
+
+% ─────────────────────────────────────────────
+\section{eBPF-Based Security Solutions}
+\label{sec:lit_ebpf}
+
+\subsection{Foundations of eBPF for Security}
+
+The seminal work by McCanne and Jacobson~\cite{mccanne1993bpf} introduced the original
+BPF as a packet filtering engine. The extension to eBPF, documented by Starovoitov and
+Borkmann~\cite{borkmann2014ebpf}, transformed this into a general kernel programmability
+framework.
+
+Gregg's comprehensive treatment~\cite{gregg2019bpf} established eBPF as a production
+observability technology, demonstrating its application across performance tracing,
+network monitoring, and security auditing. The work highlights eBPF's key properties
+relevant to security: zero-copy telemetry, in-kernel processing, and negligible overhead.
+
+\subsection{XDP-Based DDoS Mitigation}
+
+H\o{}iland-J\o{}rgensen et al.~\cite{hoiland2018xdp} introduced XDP as a high-performance
+packet processing framework. Their evaluation demonstrated line-rate packet processing
+(up to 24.4 Mpps on a 10 GbE NIC) with sub-microsecond per-packet latency, establishing
+XDP as a practical DDoS mitigation substrate.
+
+Miano et al.~\cite{miano2019polycube} presented Polycube, a framework for deploying
+eBPF-based network services as composable ``cubes''. Their work demonstrated stateful
+firewall and rate-limiting cubes deployable in Kubernetes, achieving throughput
+preservation under DDoS conditions with significantly lower overhead than iptables-based
+solutions.
+
+\textbf{FlowSentryX}~\cite{flowsentryx} is an open-source XDP/eBPF-based DDoS mitigation
+system. It implements per-source-IP rate limiting and SYN cookie validation at the XDP
+layer, demonstrating practical deployment on bare-metal servers. However, FlowSentryX
+operates at the IP level without Kubernetes-awareness, cannot distinguish between traffic
+from different pods sharing an IP (as occurs with Kubernetes Services), and applies static
+rate limits without anomaly scoring.
+
+\subsection{Runtime Security and System Call Monitoring}
+
+Falco~\cite{falco2023} is an open-source runtime security tool that uses eBPF (and
+historically, a kernel module) to intercept system calls and detect anomalous container
+behaviour (e.g., unexpected privilege escalation, shell spawning, file access). While
+effective for host-based intrusion detection, Falco operates at the syscall level and does
+not model network communication graphs.
+
+Bcc-tools and \texttt{bpftrace}~\cite{bpftrace} provide dynamic tracing of kernel
+functions, enabling forensic investigation of security incidents. These tools are used
+primarily for offline analysis rather than real-time detection.
+
+\subsection{eBPF-Based Access Control: BPF-LSM}
+
+The BPF Linux Security Module (BPF-LSM) interface, introduced in Linux 5.7~\cite{bpflsm},
+allows eBPF programs to be attached to LSM hooks (e.g., \texttt{socket\_connect},
+\texttt{file\_open}), enabling fine-grained, programmable access control policies.
+Singh et al.~\cite{singh2019krsi} proposed KRSI (Kernel Runtime Security
+Instrumentation), demonstrating how BPF-LSM can enforce mandatory access control
+policies that adapt to runtime system state — a capability not achievable with static
+SELinux or AppArmor policies.
+
+\subsection{Limitations of Existing eBPF Security Work}
+
+\begin{itemize}
+  \item Existing eBPF security tools (Falco, FlowSentryX, Cilium) provide excellent
+  telemetry and enforcement primitives but do not perform \emph{graph-aware} analysis of
+  inter-service communication patterns.
+  \item XDP-based mitigation is predominantly reactive and rule-based; it lacks the
+  ability to detect subtle, behavioural anomalies in service communication.
+  \item No existing eBPF security tool models Kubernetes pod communication as a dynamic
+  graph for anomaly detection.
+\end{itemize}
+
+% ─────────────────────────────────────────────
+\section{Machine Learning for DDoS Detection}
+\label{sec:lit_ml_ddos}
+
+\subsection{Classical Machine Learning Approaches}
+
+Early ML-based DDoS detection used flow features (packet rate, byte count, inter-arrival
+time) with classifiers such as Random Forest~\cite{rf_ddos}, Support Vector
+Machines~\cite{svm_ddos}, and Gradient Boosting~\cite{xgboost_ids}. These approaches
+achieve high accuracy on benchmark datasets (CICDDoS2019, CICIDS2017) for volumetric
+attacks but degrade significantly for low-and-slow attacks whose per-flow statistics
+closely resemble legitimate traffic.
+
+\subsection{Deep Learning Approaches}
+
+LUCID~\cite{lucid2020} (Lightweight Deep Learning for DDoS) uses a convolutional neural
+network over time-windowed flow statistics. The authors achieve high F1 scores with low
+computational overhead, making LUCID a practical baseline for online detection. However,
+LUCID treats each flow independently, discarding inter-flow relational structure.
+
+RNN and LSTM-based approaches~\cite{lstm_ddos} capture temporal patterns in traffic
+sequences but still operate on flat, per-flow feature vectors. They do not model
+inter-service dependencies.
+
+Kitsune~\cite{mirsky2018kitsune} uses an ensemble of autoencoders for unsupervised
+network anomaly detection. Each autoencoder is trained on a feature cluster; anomaly
+scores are aggregated via a meta-autoencoder. Kitsune provides unsupervised detection
+without labelled attack data but, like other flow-based methods, does not leverage
+inter-service relational structure.
+
+\subsection{Federated Learning for DDoS}
+
+Recent work has proposed federated DDoS detection to preserve data privacy across
+organisational boundaries~\cite{federated_ddos}. While promising for deployment at
+scale, these approaches still rely on flat traffic features and do not address the
+intra-cluster visibility problem.
+
+\subsection{Limitations}
+
+\begin{itemize}
+  \item All reviewed ML approaches analyse traffic as collections of independent flows,
+  missing relational context.
+  \item Performance on low-and-slow and application-layer attacks is significantly lower
+  than for volumetric attacks.
+  \item Models trained on standard datasets (CICDDoS2019) do not generalise to
+  Kubernetes microservice traffic, which exhibits different topological and temporal
+  characteristics.
+\end{itemize}
+
+% ─────────────────────────────────────────────
+\section{Graph-Based Anomaly Detection for Network Security}
+\label{sec:lit_graph}
+
+\subsection{Graph Neural Networks for IDS}
+
+\textbf{E-GraphSAGE}~\cite{lo2022egraphsage} is the closest existing work to this
+project. The authors apply GraphSAGE to network flow graphs where nodes represent
+hosts (IP addresses) and edges represent flows. Using features from the CICIDS2018
+dataset, they achieve competitive detection performance. However, E-GraphSAGE models a
+flat \emph{IP-flow graph} rather than a \emph{Kubernetes service topology graph}.
+Crucially, it does not model: (1) pod/service identity and Kubernetes metadata,
+(2) dynamic graph evolution as pods are created/destroyed, or (3) intra-cluster
+East-West traffic captured via eBPF.
+
+\textbf{Euler}~\cite{euler2022} applies dynamic GNNs to lateral movement detection
+in enterprise networks, modelling authentication events as a temporal graph. The
+proposed framework shares the temporal graph intuition but targets a different threat
+model (host compromise vs. DDoS).
+
+\textbf{Tiresias}~\cite{tiresias2018} uses graph-based methods for network-wide
+anomaly prediction, but does not employ GNNs and targets traditional (non-Kubernetes)
+networks.
+
+\subsection{Graph Autoencoders for Anomaly Detection}
+
+Ding et al.~\cite{ding2019deep} proposed a deep autoencoder framework for graph
+anomaly detection that combines attribute and structural reconstruction errors.
+Their framework is directly applicable to communication graph modelling, where nodes
+(pods) with anomalous feature vectors \emph{or} anomalous connectivity patterns should
+both be flagged.
+
+Dominant-Set Clustering with GAE~\cite{gae_anomaly} has been applied to social network
+anomaly detection; adaptations to network security graphs represent an underexplored
+direction.
+
+\subsection{Temporal Graph Methods}
+
+Temporal Graph Networks (TGN)~\cite{rossi2020tgn} and TGAT~\cite{xu2020tgat} extend GNNs
+to continuous-time dynamic graphs, maintaining per-node memory modules updated by
+interaction events. These architectures are directly applicable to streaming eBPF flow
+data, where flows arrive as a continuous event stream rather than as periodic snapshots.
+
+\subsection{Limitations of Existing Graph-Based Approaches}
+
+\begin{itemize}
+  \item No existing graph-based IDS incorporates Kubernetes-native telemetry (pod identity,
+  namespace, service topology, Kubernetes metadata) as graph structure.
+  \item Existing work uses static datasets (CICIDS) not representative of dynamic
+  Kubernetes workloads.
+  \item Integration of graph anomaly detection with real-time enforcement (rate limiting,
+  NetworkPolicy) has not been demonstrated.
+\end{itemize}
+
+% ─────────────────────────────────────────────
+\section{Kubernetes and Container Security}
+\label{sec:lit_k8s_security}
+
+\subsection{Network Policy Enforcement}
+
+Kubernetes NetworkPolicy~\cite{k8s_networkpolicy} provides a declarative API for
+specifying ingress/egress rules. However, enforcement depends on the CNI plugin, and the
+API supports only static, predefined policies. Dynamic policy adaptation based on runtime
+anomaly scores is not natively supported.
+
+CiliumNetworkPolicy~\cite{cilium_network_policy} extends the standard NetworkPolicy with
+Layer 7 (HTTP, DNS) rules and identity-based (rather than IP-based) policies, making it
+more suitable for dynamic Kubernetes environments.
+
+\subsection{Microservice Communication Modelling for Fault Detection}
+
+MicroRank~\cite{yu2021microrank} and Microscope~\cite{lin2018microscope} model
+Kubernetes microservice communication as call graphs for root-cause analysis of
+performance anomalies. These works demonstrate that graph modelling of microservice
+interactions is feasible and informative but focus on reliability (latency, errors) rather
+than security (attack detection).
+
+\subsection{Container Runtime Security}
+
+Falco~\cite{falco2023} and Tracee~\cite{tracee2022} (Aqua Security) use eBPF/kernel
+modules to monitor container syscall behaviour and detect security policy violations.
+These solutions complement network-level detection but do not address the DDoS threat
+model.
+
+% ─────────────────────────────────────────────
+\section{Comparison with Proposed Framework}
+\label{sec:lit_comparison}
+
+\begin{table}[h]
+\centering
+\caption{Comparison of existing solutions with the proposed \sys{} framework}
+\label{tab:comparison}
+\begin{tabularx}{\textwidth}{lcccccc}
+\toprule
+\textbf{System} & \textbf{eBPF} & \textbf{K8s-aware} & \textbf{Graph ML} & \textbf{Temporal} & \textbf{Adaptive Mitig.} & \textbf{Low-\&-Slow} \\
+\midrule
+FlowSentryX    & \checkmark & \texttimes & \texttimes & \texttimes & \texttimes & \texttimes \\
+Falco          & \checkmark & \checkmark & \texttimes & \texttimes & \texttimes & \texttimes \\
+Kitsune        & \texttimes & \texttimes & \texttimes & \texttimes & \texttimes & Partial \\
+LUCID          & \texttimes & \texttimes & \texttimes & \texttimes & \texttimes & \texttimes \\
+E-GraphSAGE    & \texttimes & \texttimes & \checkmark & \texttimes & \texttimes & Partial \\
+Euler          & \texttimes & \texttimes & \checkmark & \checkmark & \texttimes & Partial \\
+\textbf{\sys{}} & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\noindent Table~\ref{tab:comparison} illustrates that no existing system combines all five
+capabilities simultaneously. This combination --- eBPF telemetry, Kubernetes-native graph
+modelling, temporal graph ML, and adaptive mitigation --- constitutes the primary novelty
+claim of this project.
+
+% ─────────────────────────────────────────────
+\section{Summary and Research Gap}
+\label{sec:lit_gap}
+
+The literature review reveals the following converging limitations:
+
+\begin{enumerate}
+  \item \textbf{Flat traffic analysis:} Existing ML-based DDoS detection systems treat
+  network traffic as a collection of independent flows, discarding the relational structure
+  of microservice communication.
+
+  \item \textbf{Perimeter focus:} Industry-grade solutions (Cloudflare, AWS Shield) operate
+  at the network edge and have no visibility into intra-cluster, pod-to-pod communication.
+
+  \item \textbf{Static mitigation:} Rate limiting and blocking rules are threshold-based and
+  cannot adapt to dynamic, evolving attack patterns without human intervention.
+
+  \item \textbf{Graph ML without eBPF integration:} Graph-based IDS research
+  (E-GraphSAGE, Euler) demonstrates the power of relational learning but relies on
+  pre-captured, offline datasets rather than real-time eBPF telemetry.
+
+  \item \textbf{eBPF security without graph modelling:} eBPF-based tools (Cilium, Falco,
+  FlowSentryX) provide excellent telemetry and enforcement but do not perform
+  graph-aware anomaly detection.
+\end{enumerate}
+
+\textbf{The gap:} No existing system integrates real-time eBPF telemetry within a
+Kubernetes cluster, models pod communication as a dynamic graph, applies temporal GNN-based
+anomaly detection, and drives adaptive mitigation from graph anomaly scores. This project
+proposes to fill this gap with \sys{}.
+
+\bigskip
+\noindent \textit{Note: This literature review will continue to be expanded as additional
+papers are reviewed during the project. Estimated final coverage: 40--60 papers across all
+reviewed domains.}

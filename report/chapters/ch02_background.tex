@@ -1,0 +1,232 @@
+%% ============================================================
+%%  Chapter 2 — Background
+%% ============================================================
+\chapter{Background}
+\label{ch:background}
+
+\section{Kubernetes and Cloud-Native Networking}
+\label{sec:bg_kubernetes}
+
+\subsection{Kubernetes Architecture}
+Kubernetes~\cite{kubernetes2014} is an open-source container orchestration platform
+that automates the deployment, scaling, and lifecycle management of containerised
+workloads. A Kubernetes cluster comprises a \emph{control plane} (responsible for
+scheduling, state management, and API serving) and a set of \emph{worker nodes} that
+execute application workloads encapsulated in \emph{Pods}.
+
+Network communication in Kubernetes follows a flat networking model: every Pod is
+assigned a unique IP address and can communicate directly with any other Pod across nodes
+without NAT, via a \emph{Container Network Interface (CNI)} plugin. CNI plugins such as
+Flannel, Calico, Weave, and \emph{Cilium}~\cite{cilium} implement this networking model
+at the OS level.
+
+\subsection{Kubernetes Networking Constructs}
+\begin{description}
+  \item[Pod:] The atomic deployment unit; one or more co-located containers sharing a
+  network namespace.
+  \item[Service:] A stable virtual IP (\texttt{ClusterIP}) that load-balances traffic
+  across a set of pods.
+  \item[Namespace:] A logical isolation boundary grouping related workloads.
+  \item[NetworkPolicy:] A Kubernetes-native API object that specifies ingress/egress
+  rules for pods. Enforcement is CNI-dependent.
+\end{description}
+
+\subsection{Cilium and Hubble}
+Cilium~\cite{cilium} is a CNI plugin that uses eBPF to implement networking, security,
+and observability entirely in the Linux kernel. Unlike iptables-based CNIs, Cilium
+attaches eBPF programs to network interfaces, enabling high-performance packet processing
+without context switches to userspace.
+
+Hubble~\cite{hubble} is Cilium's distributed observability layer. It captures
+\emph{flow records} --- structured metadata about every network connection (source pod,
+destination pod, protocol, bytes, packets, verdict, latency) --- from the eBPF data plane
+and exposes them via a gRPC API and a web UI. In this project, Hubble serves as the
+primary telemetry source for graph construction.
+
+% ─────────────────────────────────────────────
+\section{eBPF: Extended Berkeley Packet Filter}
+\label{sec:bg_ebpf}
+
+\subsection{Historical Context}
+The Berkeley Packet Filter (BPF) was introduced by McCanne and Jacobson in 1992~\cite{mccanne1993bpf}
+as an in-kernel packet filtering mechanism for \texttt{libpcap}/\texttt{tcpdump}. It
+defined a simple register-based virtual machine running within the kernel to evaluate
+filter expressions on packet data without copying packets to userspace.
+
+Extended BPF (eBPF), introduced in Linux 3.15 (2014) and stabilised through 4.x and 5.x
+kernels, fundamentally transformed BPF from a packet filter into a general-purpose,
+safe, sandboxed programmability layer for the Linux kernel~\cite{gregg2019bpf}.
+
+\subsection{eBPF Architecture}
+\label{subsec:ebpf_arch}
+
+The eBPF subsystem comprises four core components:
+
+\begin{enumerate}
+  \item \textbf{eBPF Programs:} Written in a restricted subset of C and compiled to
+  eBPF bytecode using LLVM/Clang. Program types determine the kernel hook they attach to
+  (e.g., \texttt{BPF\_PROG\_TYPE\_XDP}, \texttt{BPF\_PROG\_TYPE\_TRACEPOINT},
+  \texttt{BPF\_PROG\_TYPE\_LSM}).
+
+  \item \textbf{Verifier:} A static analyser that exhaustively proves safety properties
+  before a program is loaded into the kernel: no unbounded loops, no invalid memory
+  accesses, no out-of-bounds reads, and type safety of all helper calls.
+
+  \item \textbf{JIT Compiler:} Translates verified eBPF bytecode to native machine code
+  (x86-64, ARM64, etc.) for near-native execution performance.
+
+  \item \textbf{BPF Maps:} Kernel-resident key-value stores that provide persistent state
+  and bidirectional communication between eBPF programs and userspace applications.
+  Common map types include hash maps, LRU maps, ring buffers, and per-CPU arrays.
+\end{enumerate}
+
+\subsection{Key eBPF Hook Points}
+\label{subsec:ebpf_hooks}
+
+\begin{table}[h]
+\centering
+\caption{Common eBPF program types and their kernel attachment points}
+\label{tab:ebpf_hooks}
+\begin{tabularx}{\textwidth}{lXl}
+\toprule
+\textbf{Program Type} & \textbf{Attachment Point / Use Case} & \textbf{Typical Latency} \\
+\midrule
+XDP & Driver/NIC level; earliest ingress hook; line-rate packet processing & $<$1~$\mu$s \\
+TC (Traffic Control) & \texttt{cls\_bpf} at TC ingress/egress; bidirectional & $\sim$1--5~$\mu$s \\
+Socket Filter & Per-socket packet filtering (e.g., \texttt{AF\_PACKET}) & Low \\
+kprobe/kretprobe & Dynamic kernel function instrumentation & Moderate \\
+Tracepoint & Static kernel tracepoints (stable ABI) & Low \\
+LSM & Linux Security Module hooks; access control enforcement & Low \\
+Cgroup & Per-cgroup network/socket control & Low \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{eXpress Data Path (XDP)}
+XDP~\cite{hoiland2018xdp} is an eBPF program type that attaches at the earliest possible
+point in the packet receive path --- directly in the NIC driver or at the TC ingress hook.
+XDP programs return an action verdict for each packet:
+\begin{itemize}
+  \item \texttt{XDP\_DROP} — discard the packet immediately.
+  \item \texttt{XDP\_PASS} — forward to the kernel network stack.
+  \item \texttt{XDP\_TX} — retransmit the packet out the same interface.
+  \item \texttt{XDP\_REDIRECT} — redirect to another interface or CPU.
+\end{itemize}
+XDP can process millions of packets per second on commodity hardware, making it suitable
+for high-rate DDoS mitigation~\cite{hoiland2018xdp}.
+
+\subsection{eBPF Safety Guarantees}
+A critical property that distinguishes eBPF from kernel modules is its safety model: all
+programs must pass verifier analysis before execution. The verifier proves termination
+(no loops without bounded iteration), memory safety, and valid register type propagation.
+This allows untrusted eBPF programs to be loaded without risking kernel stability.
+
+% ─────────────────────────────────────────────
+\section{DDoS Attacks: Taxonomy and Characteristics}
+\label{sec:bg_ddos}
+
+\subsection{Taxonomy}
+DDoS attacks can be classified along several dimensions~\cite{ddos_survey_2022}:
+
+\begin{description}
+  \item[By OSI Layer:]
+    \textit{Network-layer} attacks target Layers 3--4 (e.g., ICMP flood, SYN flood,
+    UDP amplification). \textit{Application-layer} attacks target Layer 7 (e.g., HTTP
+    flood, Slowloris, DNS query flood).
+
+  \item[By Volume vs. Sophistication:]
+    \textit{Volumetric} attacks saturate bandwidth or connection tables with high-rate
+    traffic. \textit{Low-and-slow} attacks (e.g., Slowloris~\cite{slowloris}) send traffic
+    at rates indistinguishable from legitimate users but exhaust server connection state
+    over time.
+
+  \item[By Source:]
+    \textit{Botnet-driven} attacks coordinate thousands of compromised hosts.
+    \textit{Amplification} attacks exploit protocols with large response-to-request ratios
+    (DNS, NTP, SSDP) using spoofed source IPs.
+\end{description}
+
+\subsection{DDoS in Kubernetes Environments}
+Kubernetes-specific threat vectors include~\cite{k8s_security_2023}:
+\begin{itemize}
+  \item Compromised pods acting as internal attack sources (East-West DDoS).
+  \item Exploiting Kubernetes auto-scaling to amplify attack cost for defenders.
+  \item Targeting specific microservices that act as bottlenecks (e.g., authentication
+  services, databases).
+  \item Leveraging service mesh encryption to hide attack traffic from perimeter sensors.
+\end{itemize}
+
+% ─────────────────────────────────────────────
+\section{Graph Theory Foundations}
+\label{sec:bg_graphs}
+
+\subsection{Graph Definitions}
+A \emph{graph} $G = (V, E)$ consists of a set of vertices $V$ and edges $E \subseteq
+V \times V$. In this project, a \emph{communication graph} $G_t$ is constructed at time
+$t$ where:
+\begin{align}
+  V &= \{\text{pods, services, external endpoints}\} \\
+  E &= \{\text{network flows observed in window } [t-\Delta t, t]\}
+\end{align}
+Node features $\mathbf{x}_v \in \mathbb{R}^d$ encode per-pod metrics (request rate, error
+rate, CPU utilisation). Edge features $\mathbf{e}_{uv} \in \mathbb{R}^k$ encode flow
+metrics (throughput, latency, packet count).
+
+\subsection{Dynamic Graphs}
+Real Kubernetes workloads exhibit non-stationary communication patterns: pods are created
+and destroyed, traffic patterns shift with user load, and deployments change topology.
+A \emph{dynamic graph} or \emph{temporal graph} $\{G_{t_1}, G_{t_2}, \ldots, G_{t_n}\}$
+captures this temporal evolution~\cite{kazemi2020representation}.
+
+% ─────────────────────────────────────────────
+\section{Graph Neural Networks}
+\label{sec:bg_gnns}
+
+\subsection{Message Passing Framework}
+The dominant paradigm for GNNs is \emph{message passing}~\cite{gilmer2017mpnn}. Each
+node $v$ iteratively aggregates information from its neighbourhood $\mathcal{N}(v)$:
+\begin{equation}
+  \mathbf{h}_v^{(l+1)} = \text{UPDATE}\left(\mathbf{h}_v^{(l)},
+    \text{AGGREGATE}\left(\{\mathbf{h}_u^{(l)} : u \in \mathcal{N}(v)\}\right)\right)
+\end{equation}
+where $\mathbf{h}_v^{(l)}$ is the embedding of node $v$ at layer $l$. After $L$ layers,
+$\mathbf{h}_v^{(L)}$ encodes information from the $L$-hop neighbourhood of $v$.
+
+\subsection{Graph Convolutional Network (GCN)}
+GCN~\cite{kipf2017gcn} instantiates the message passing framework with:
+\begin{equation}
+  \mathbf{H}^{(l+1)} = \sigma\left(\tilde{\mathbf{D}}^{-\frac{1}{2}}
+    \tilde{\mathbf{A}} \tilde{\mathbf{D}}^{-\frac{1}{2}} \mathbf{H}^{(l)} \mathbf{W}^{(l)}\right)
+\end{equation}
+where $\tilde{\mathbf{A}} = \mathbf{A} + \mathbf{I}$ is the adjacency matrix with
+self-loops, $\tilde{\mathbf{D}}$ is the degree matrix, and $\mathbf{W}^{(l)}$ is a
+learnable weight matrix.
+
+\subsection{GraphSAGE}
+GraphSAGE~\cite{hamilton2017graphsage} uses inductive learning by sampling and
+aggregating fixed-size neighbourhoods, enabling generalisation to unseen nodes --- critical
+for Kubernetes environments where pods are created dynamically.
+
+\subsection{Graph Autoencoders (GAE)}
+GAE~\cite{kipf2016vgae} comprises an encoder $q(Z|X,A)$ that maps node features to a
+latent space $Z$, and a decoder $p(A|Z)$ that reconstructs the adjacency matrix. Anomaly
+detection uses the reconstruction error:
+\begin{equation}
+  \text{score}(v) = \left\| \mathbf{A}_v - \hat{\mathbf{A}}_v \right\|_F
+\end{equation}
+High scores indicate structural anomalies --- edges that should not exist (attack traffic
+from unexpected sources) or edges that disappear (service degradation).
+
+\subsection{Temporal Graph Networks (TGN)}
+TGN~\cite{rossi2020tgn} processes a stream of timestamped interaction events, maintaining
+per-node \emph{memory states} that capture longitudinal behaviour. This enables detection
+of attacks whose signatures emerge only over extended time windows.
+
+% ─────────────────────────────────────────────
+\section{Summary}
+This chapter has established the foundational concepts required to understand the
+remainder of this report: Kubernetes networking, the eBPF subsystem and its hook model,
+the DDoS threat landscape in cloud-native environments, and the graph ML techniques that
+will be applied for anomaly detection. Chapter~\ref{ch:literature} surveys how these
+technologies have been applied in prior research and identifies the gaps that motivate
+this project.

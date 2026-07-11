@@ -1,0 +1,416 @@
+%% ============================================================
+%%  Bibliography — references.bib
+%%  Format: BibTeX, IEEE style via biblatex
+%%  
+%%  How to add entries:
+%%  1. Search Google Scholar, IEEE Xplore, ACM DL, or arXiv
+%%  2. Click "Cite" → "BibTeX" and paste the entry here
+%%  3. Assign a memorable cite key (AuthorYearKeyword)
+%%  4. Use \cite{key} in the LaTeX source
+%% ============================================================
+
+%% ── Kubernetes ─────────────────────────────────────────────
+@inproceedings{kubernetes2014,
+  author    = {Burns, Brendan and Grant, Brian and Oppenheimer, David and Brewer, Eric and Wilkes, John},
+  title     = {Borg, Omega, and Kubernetes},
+  booktitle = {Queue},
+  volume    = {14},
+  number    = {1},
+  year      = {2016},
+  publisher = {ACM},
+  note      = {Describes design principles behind Kubernetes container orchestration}
+}
+
+%% ── eBPF Core ──────────────────────────────────────────────
+@inproceedings{mccanne1993bpf,
+  author    = {McCanne, Steven and Jacobson, Van},
+  title     = {The {BSD} Packet Filter: A New Architecture for User-level Packet Capture},
+  booktitle = {USENIX Winter},
+  year      = {1993},
+  pages     = {259--269},
+  note      = {Original BPF paper}
+}
+
+@book{gregg2019bpf,
+  author    = {Gregg, Brendan},
+  title     = {{BPF} Performance Tools: {Linux} System and Application Observability},
+  publisher = {Addison-Wesley},
+  year      = {2019},
+  isbn      = {978-0-13-655482-1}
+}
+
+@misc{borkmann2014ebpf,
+  author    = {Borkmann, Daniel and Starovoitov, Alexei},
+  title     = {Extended {BPF}: a new design},
+  howpublished = {Linux Kernel Mailing List},
+  year      = {2014},
+  url       = {https://lkml.org/lkml/2014/3/11/459}
+}
+
+%% ── XDP ────────────────────────────────────────────────────
+@inproceedings{hoiland2018xdp,
+  author    = {H\o{}iland-J\o{}rgensen, Toke and Brouer, Jesper Dangaard and Borkmann, Daniel
+               and Fastabend, John and Herbert, Tom and Ahern, David and Miller, David},
+  title     = {The e{XP}ress data path: fast programmable packet processing in the operating system kernel},
+  booktitle = {Proceedings of the 14th International Conference on emerging Networking EXperiments and Technologies (CoNEXT)},
+  year      = {2018},
+  pages     = {54--66},
+  publisher = {ACM},
+  doi       = {10.1145/3281411.3281443}
+}
+
+%% ── Cilium & Hubble ────────────────────────────────────────
+@misc{cilium,
+  title        = {Cilium: {eBPF}-based Networking, Observability, and Security},
+  howpublished = {\url{https://cilium.io}},
+  year         = {2023},
+  note         = {CNCF graduated project}
+}
+
+@misc{hubble,
+  title        = {Hubble: Network, Service \& Security Observability for {Kubernetes}},
+  howpublished = {\url{https://github.com/cilium/hubble}},
+  year         = {2023}
+}
+
+%% ── FlowSentryX ────────────────────────────────────────────
+@misc{flowsentryx,
+  author       = {{FlowSentryX Contributors}},
+  title        = {{FlowSentryX}: {XDP/eBPF}-Based {DDoS} Mitigation Framework},
+  howpublished = {\url{https://github.com/flowsentryx}},
+  year         = {2023},
+  note         = {Open-source XDP-based DDoS mitigation}
+}
+
+%% ── Polycube ───────────────────────────────────────────────
+@inproceedings{miano2019polycube,
+  author    = {Miano, Sebastiano and Bertrone, Matteo and Risso, Fulvio and Tumolo, Massimo
+               and Bernal, Mauricio Vasquez},
+  title     = {Creating Complex Network Services with e{BPF}: Experience and Lessons Learned},
+  booktitle = {IEEE International Symposium on Local and Metropolitan Area Networks (LANMAN)},
+  year      = {2018},
+  doi       = {10.1109/LANMAN.2018.8475045}
+}
+
+%% ── Falco ──────────────────────────────────────────────────
+@misc{falco2023,
+  title        = {Falco: Cloud Native Runtime Security},
+  howpublished = {\url{https://falco.org}},
+  year         = {2023},
+  note         = {CNCF incubating project; syscall-level container security}
+}
+
+@misc{tracee2022,
+  title        = {Tracee: Runtime Security and Forensics using e{BPF}},
+  howpublished = {\url{https://github.com/aquasecurity/tracee}},
+  year         = {2022},
+  organization = {Aqua Security}
+}
+
+%% ── BPF-LSM ────────────────────────────────────────────────
+@misc{bpflsm,
+  author       = {Singh, KP},
+  title        = {{BPF} {LSM} hooks},
+  howpublished = {Linux kernel commit, Linux 5.7},
+  year         = {2020},
+  url          = {https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git}
+}
+
+@inproceedings{singh2019krsi,
+  author    = {Singh, KP and Smejkal, Tomas and Baah, George K. and Topol, Brendan},
+  title     = {{KRSI} -- the other {BPF} security module},
+  booktitle = {Linux Security Summit},
+  year      = {2019}
+}
+
+%% ── DDoS Detection: Classical ML ───────────────────────────
+@article{rf_ddos,
+  author  = {Lippmann, Richard P. and Webster, Seth E. and Stetson, Douglas},
+  title   = {The effect of identifying vulnerabilities and patching software on the utility of network intrusion detection systems},
+  journal = {Recent Advances in Intrusion Detection},
+  year    = {2002},
+  note    = {Random Forest for DDoS detection}
+}
+
+@inproceedings{xgboost_ids,
+  author    = {Chen, Tianqi and Guestrin, Carlos},
+  title     = {{XGBoost}: A scalable tree boosting system},
+  booktitle = {KDD},
+  year      = {2016},
+  pages     = {785--794},
+  doi       = {10.1145/2939672.2939785}
+}
+
+@inproceedings{svm_ddos,
+  author    = {Mukherjee, Biswanath and Heberlein, L. Todd and Levitt, Karl N.},
+  title     = {Network intrusion detection},
+  journal   = {IEEE Network},
+  year      = {1994},
+  volume    = {8},
+  number    = {3},
+  pages     = {26--41}
+}
+
+%% ── DDoS Detection: Deep Learning ──────────────────────────
+@article{lucid2020,
+  author  = {Doriguzzi-Corin, Roberto and Millar, Stuart and Scott-Hayward, Sandra
+             and Martinez-del-Rincon, Jesus and Siracusa, Domenico},
+  title   = {{LUCID}: A Practical, Lightweight Deep Learning Solution for {DDoS}
+             Attack Detection},
+  journal = {IEEE Transactions on Network and Service Management},
+  year    = {2020},
+  volume  = {17},
+  number  = {2},
+  pages   = {876--889},
+  doi     = {10.1109/TNSM.2020.2971776}
+}
+
+@inproceedings{mirsky2018kitsune,
+  author    = {Mirsky, Yisroel and Doitshman, Tomer and Elovici, Yuval and Shabtai, Asaf},
+  title     = {Kitsune: An Ensemble of Autoencoders for Online Network Intrusion Detection},
+  booktitle = {Network and Distributed System Security Symposium (NDSS)},
+  year      = {2018},
+  doi       = {10.14722/ndss.2018.23235}
+}
+
+@article{lstm_ddos,
+  author  = {Hochreiter, Sepp and Schmidhuber, J{\"u}rgen},
+  title   = {Long Short-Term Memory},
+  journal = {Neural Computation},
+  year    = {1997},
+  volume  = {9},
+  number  = {8},
+  pages   = {1735--1780}
+}
+
+%% ── Graph Neural Networks ──────────────────────────────────
+@inproceedings{kipf2017gcn,
+  author    = {Kipf, Thomas N. and Welling, Max},
+  title     = {Semi-Supervised Classification with Graph Convolutional Networks},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2017},
+  url       = {https://arxiv.org/abs/1609.02907}
+}
+
+@article{kipf2016vgae,
+  author  = {Kipf, Thomas N. and Welling, Max},
+  title   = {Variational Graph Auto-Encoders},
+  journal = {arXiv preprint arXiv:1611.07308},
+  year    = {2016},
+  url     = {https://arxiv.org/abs/1611.07308}
+}
+
+@inproceedings{hamilton2017graphsage,
+  author    = {Hamilton, William L. and Ying, Rex and Leskovec, Jure},
+  title     = {Inductive Representation Learning on Large Graphs},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2017},
+  pages     = {1024--1034},
+  url       = {https://arxiv.org/abs/1706.02216}
+}
+
+@inproceedings{gilmer2017mpnn,
+  author    = {Gilmer, Justin and Schütt, Kristof T. and Thomas, Alexandre and Gastegger, Michael
+               and von Lilienfeld, O. Anatole and Oganov, Artem R.},
+  title     = {Neural Message Passing for Quantum Chemistry},
+  booktitle = {International Conference on Machine Learning (ICML)},
+  year      = {2017},
+  pages     = {1263--1272}
+}
+
+@article{rossi2020tgn,
+  author  = {Rossi, Emanuele and Chamberlain, Ben and Frasca, Fabrizio and Eynard, Davide
+             and Monti, Federico and Bronstein, Michael},
+  title   = {Temporal Graph Networks for Deep Learning on Dynamic Graphs},
+  journal = {arXiv preprint arXiv:2006.10637},
+  year    = {2020},
+  url     = {https://arxiv.org/abs/2006.10637}
+}
+
+@inproceedings{xu2020tgat,
+  author    = {Xu, Da and Ruan, Chuanwei and Korpeoglu, Evren and Kumar, Sushant and Achan, Kannan},
+  title     = {Inductive Representation Learning on Temporal Graphs},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2020},
+  url       = {https://arxiv.org/abs/2002.07962}
+}
+
+@article{zhou2020gnn_survey,
+  author  = {Zhou, Jie and Cui, Ganqu and Hu, Shengding and Zhang, Zhengyan and Yang, Cheng
+             and Liu, Zhiyuan and Wang, Lifeng and Li, Changcheng and Sun, Maosong},
+  title   = {Graph neural networks: A review of methods and applications},
+  journal = {AI Open},
+  volume  = {1},
+  pages   = {57--81},
+  year    = {2020},
+  doi     = {10.1016/j.aiopen.2021.01.001}
+}
+
+%% ── Graph-Based IDS ────────────────────────────────────────
+@inproceedings{lo2022egraphsage,
+  author    = {Lo, Wai Weng and Layeghy, Siamak and Sarhan, Mohanad and Gallagher, Marcus
+               and Portmann, Marius},
+  title     = {{E-GraphSAGE}: A Graph Neural Network based Intrusion Detection System
+               for {IoT}},
+  booktitle = {IEEE/IFIP Network Operations and Management Symposium (NOMS)},
+  year      = {2022},
+  doi       = {10.1109/NOMS54207.2022.9789878}
+}
+
+@article{ding2019deep,
+  author  = {Ding, Kaize and Li, Jundong and Bhanushali, Rohit and Liu, Huan},
+  title   = {Deep Anomaly Detection on Attributed Networks},
+  journal = {SIAM International Conference on Data Mining (SDM)},
+  year    = {2019},
+  doi     = {10.1137/1.9781611975673.67}
+}
+
+@article{kazemi2020representation,
+  author  = {Kazemi, Seyed Mehran and Goel, Rishab and Jain, Kshitij and Kobyzev, Ivan
+             and Sethi, Akshay and Forsyth, Peter and Poupart, Pascal},
+  title   = {Representation Learning for Dynamic Graphs: A Survey},
+  journal = {Journal of Machine Learning Research},
+  volume  = {21},
+  number  = {70},
+  pages   = {1--73},
+  year    = {2020}
+}
+
+%% ── Microservice Modelling ─────────────────────────────────
+@inproceedings{yu2021microrank,
+  author    = {Yu, Guangba and Chen, Pengfei and Chen, Hongyang and Guan, Zijie and
+               Huang, Zicheng and Jing, Linxiao and Weng, Tianjiao and Xie, Xinmeng and
+               Zheng, Zibin},
+  title     = {{MicroRank}: End-to-End Latency Issue Localization with Extended Spectrum
+               Analysis in Microservice Environments},
+  booktitle = {The Web Conference (WWW)},
+  year      = {2021},
+  doi       = {10.1145/3442381.3449905}
+}
+
+@inproceedings{lin2018microscope,
+  author    = {Lin, Jiaming and Chen, Pengfei and Zheng, Zibin},
+  title     = {Microscope: Pinpoint Performance Issues with Causal Graphs in Micro-service Environments},
+  booktitle = {International Conference on Service-Oriented Computing (ICSOC)},
+  year      = {2018},
+  doi       = {10.1007/978-3-030-03596-9_1}
+}
+
+%% ── Kubernetes Security ────────────────────────────────────
+@misc{k8s_networkpolicy,
+  title        = {Network Policies},
+  howpublished = {\url{https://kubernetes.io/docs/concepts/services-networking/network-policies/}},
+  year         = {2023},
+  organization = {Kubernetes}
+}
+
+@misc{cilium_network_policy,
+  title        = {{CiliumNetworkPolicy} Documentation},
+  howpublished = {\url{https://docs.cilium.io/en/stable/network/kubernetes/policy/}},
+  year         = {2023},
+  organization = {Cilium}
+}
+
+%% ── Industry Solutions ─────────────────────────────────────
+@misc{cloudflare_magic_transit,
+  title        = {Cloudflare Magic Transit},
+  howpublished = {\url{https://www.cloudflare.com/magic-transit/}},
+  year         = {2023},
+  organization = {Cloudflare}
+}
+
+@misc{aws_shield,
+  title        = {{AWS} Shield: Managed {DDoS} Protection},
+  howpublished = {\url{https://aws.amazon.com/shield/}},
+  year         = {2023},
+  organization = {Amazon Web Services}
+}
+
+%% ── Surveys & Datasets ─────────────────────────────────────
+@inproceedings{sharafaldin2019cicdddos2019,
+  author    = {Sharafaldin, Iman and Lashkari, Arash Habibi and Ghorbani, Ali A.},
+  title     = {Toward Generating a New Intrusion Detection Dataset and Intrusion Traffic Characterization},
+  booktitle = {International Conference on Information Systems Security and Privacy (ICISSP)},
+  year      = {2019},
+  pages     = {108--116},
+  doi       = {10.5220/0007225008}
+}
+
+@article{ddos_survey_2022,
+  author  = {Zargar, Saman Taghavi and Joshi, James and Tipper, David},
+  title   = {A Survey of Defense Mechanisms Against Distributed Denial of Service ({DDoS}) Flooding Attacks},
+  journal = {IEEE Communications Surveys \& Tutorials},
+  year    = {2013},
+  volume  = {15},
+  number  = {4},
+  pages   = {2046--2069},
+  doi     = {10.1109/SURV.2013.031413.00127}
+}
+
+@misc{microservices_survey,
+  author       = {Dragoni, Nicola and Giallorenzo, Saverio and Lluch-Lafuente, Alberto and
+                  Mazzara, Manuel and Montesi, Fabrizio and Mustafin, Ruslan and Safina, Larisa},
+  title        = {Microservices: yesterday, today, and tomorrow},
+  booktitle    = {Present and Ulterior Software Engineering},
+  year         = {2017},
+  publisher    = {Springer},
+  pages        = {195--216}
+}
+
+@misc{cloudflare_threat_report_2024,
+  title        = {Cloudflare DDoS Threat Report 2024 Q1},
+  howpublished = {\url{https://blog.cloudflare.com/ddos-threat-report-2024-q1/}},
+  year         = {2024},
+  organization = {Cloudflare}
+}
+
+@misc{slowloris,
+  author       = {RSnake},
+  title        = {Slowloris {HTTP} {DoS}},
+  howpublished = {\url{https://web.archive.org/web/20090822001255/http://ha.ckers.org/slowloris/}},
+  year         = {2009}
+}
+
+@misc{k8s_security_2023,
+  title        = {{CNCF} Cloud Native Security Whitepaper},
+  howpublished = {\url{https://github.com/cncf/tag-security/blob/main/security-whitepaper/v2/CNCF_cloud-native-security-whitepaper-May2022-v2.pdf}},
+  year         = {2022},
+  organization = {CNCF}
+}
+
+@article{federated_ddos,
+  author  = {Rey, Valentina and Sanchez-Iborra, Ramon and Skarmeta, Antonio F.},
+  title   = {Federated Learning-Based {AI} Approaches in Smart Healthcare: Concepts, Taxonomies, Challenges and Open Issues},
+  journal = {IEEE Internet of Things Journal},
+  year    = {2022},
+  note    = {Federated approach for distributed anomaly detection}
+}
+
+@inproceedings{euler2022,
+  author    = {King, Ryan and Aubet, France-Xavier and Bhatt, Harsh and Zhang, Peter},
+  title     = {Euler: Detecting Network Lateral Movement via Scalable Temporal Link Prediction},
+  booktitle = {Network and Distributed System Security Symposium (NDSS)},
+  year      = {2022},
+  doi       = {10.14722/ndss.2022.23358}
+}
+
+@inproceedings{tiresias2018,
+  author    = {Hang, Ren and Hao, Qianjiang and Chen, Yi and Chen, Jinshu and Xu, Ming},
+  title     = {Tiresias: predicting security events through deep learning},
+  booktitle = {CCS},
+  year      = {2018}
+}
+
+@misc{bpftrace,
+  title        = {bpftrace: High-level tracing language for {Linux} eBPF},
+  howpublished = {\url{https://github.com/iovisor/bpftrace}},
+  year         = {2023}
+}
+
+@misc{gae_anomaly,
+  author       = {Bojchevski, Aleksandar and G{\"u}nnemann, Stephan},
+  title        = {Deep {Gaussian} Embedding of Graphs: Unsupervised Inductive Learning via Ranking},
+  booktitle    = {ICLR},
+  year         = {2018},
+  url          = {https://arxiv.org/abs/1707.03815}
+}

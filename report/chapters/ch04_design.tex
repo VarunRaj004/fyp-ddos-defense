@@ -1,0 +1,319 @@
+%% ============================================================
+%%  Chapter 4 — System Design (First Cut)
+%% ============================================================
+\chapter{System Design}
+\label{ch:design}
+
+\section{Design Overview}
+\label{sec:design_overview}
+
+\sys{} is designed as a four-phase, loosely-coupled pipeline running within a Kubernetes
+cluster. The design adheres to the following principles:
+
+\begin{description}
+  \item[Kubernetes-nativeness:] All components are deployed as Kubernetes resources
+  (DaemonSets, Deployments, ConfigMaps, CRDs). No external infrastructure is required.
+
+  \item[Observability without modification:] Traffic telemetry is collected via eBPF
+  without modifying application code, sidecar injection, or service mesh configuration.
+
+  \item[Online operation:] All phases operate in a streaming fashion with bounded
+  latency, enabling near-real-time detection and response.
+
+  \item[Defence-in-depth:] Mitigation is graduated --- from soft throttling to selective
+  blocking --- to minimise impact on legitimate traffic.
+
+  \item[Reproducibility:] All components are open-source and deployable via standard
+  Kubernetes manifests (Helm charts).
+\end{description}
+
+% ─────────────────────────────────────────────
+\section{High-Level Architecture}
+\label{sec:design_arch}
+
+The system architecture is illustrated in Figure~\ref{fig:architecture}. The four phases
+--- Observe, Model, Detect, Mitigate --- are described in detail in the following sections.
+
+\begin{figure}[H]
+\centering
+% Replace with actual architecture diagram when available
+% \includegraphics[width=\textwidth]{architecture}
+\begin{tikzpicture}[
+  node distance=0.8cm and 1.2cm,
+  box/.style={rectangle, rounded corners=4pt, draw=NavyBlue, fill=NavyBlue!10,
+              text width=3.2cm, minimum height=1.1cm, align=center, font=\small\bfseries},
+  phase/.style={rectangle, rounded corners=2pt, draw=gray, fill=gray!10,
+                text width=1cm, minimum height=4.5cm, align=center,
+                font=\tiny\bfseries\color{gray}},
+  arrow/.style={-Stealth, thick, NavyBlue},
+  labelbox/.style={font=\tiny, text=gray}
+]
+  %% Workloads
+  \node[box, fill=green!10, draw=ForestGreen] (pods) {Kubernetes\\Pods / Services};
+
+  %% Phase 1 — Observe
+  \node[box, right=1.5cm of pods] (ebpf) {eBPF Probes\\(Cilium/TC hooks)};
+  \node[box, below=0.6cm of ebpf] (hubble) {Hubble\\Flow Exporter};
+  \node[labelbox, above=0.1cm of ebpf] {Phase 1: Observe};
+
+  %% Phase 2 — Model
+  \node[box, right=1.5cm of ebpf, yshift=-0.5cm] (graphbuilder) {Graph\\Construction\\Engine};
+  \node[labelbox, above=0.1cm of graphbuilder] {Phase 2: Model};
+
+  %% Phase 3 — Detect
+  \node[box, right=1.5cm of graphbuilder] (gnn) {GNN Anomaly\\Detector\\(GAE / GraphSAGE)};
+  \node[labelbox, above=0.1cm of gnn] {Phase 3: Detect};
+
+  %% Phase 4 — Mitigate
+  \node[box, right=1.5cm of gnn, fill=red!10, draw=red!60] (mitigate) {Adaptive\\Mitigation\\Controller};
+  \node[labelbox, above=0.1cm of mitigate] {Phase 4: Mitigate};
+
+  %% Enforcement
+  \node[box, below=1cm of mitigate, fill=orange!10, draw=orange!60] (xdp) {XDP/TC Rate\\Limiter +\\NetworkPolicy};
+
+  %% Arrows
+  \draw[arrow] (pods) -- (ebpf);
+  \draw[arrow] (ebpf) -- (hubble);
+  \draw[arrow] (hubble) -- (graphbuilder);
+  \draw[arrow] (graphbuilder) -- (gnn);
+  \draw[arrow] (gnn) -- node[above,font=\tiny]{scores} (mitigate);
+  \draw[arrow] (mitigate) -- (xdp);
+  \draw[arrow, dashed, red!50] (xdp.west) to[bend right=30] (pods.south);
+
+\end{tikzpicture}
+\caption{\sys{} high-level architecture: four-phase pipeline from eBPF telemetry to
+adaptive mitigation.}
+\label{fig:architecture}
+\end{figure}
+
+% ─────────────────────────────────────────────
+\section{Phase 1: eBPF-Based Observability}
+\label{sec:design_phase1}
+
+\subsection{Telemetry Collection Strategy}
+
+Rather than writing raw eBPF programs from scratch, this project leverages the Cilium CNI
+plugin and its Hubble observability layer. This decision is justified by:
+
+\begin{enumerate}
+  \item \textbf{Production-readiness:} Cilium is a CNCF graduated project used in
+  production by major cloud providers.
+  \item \textbf{Rich flow metadata:} Hubble exports structured \texttt{flow.pb} protobuf
+  records containing source/destination pod identities, protocol, verdict, L7 metadata.
+  \item \textbf{gRPC streaming API:} Hubble's relay component exposes a gRPC streaming
+  interface suitable for real-time consumption.
+  \item \textbf{Reduced implementation risk:} Using Cilium's battle-tested eBPF programs
+  frees development time for the novel graph ML and mitigation components.
+\end{enumerate}
+
+\subsection{Flow Record Schema}
+
+Each Hubble flow record contains the fields shown in Table~\ref{tab:flow_schema}.
+
+\begin{table}[H]
+\centering
+\caption{Key fields in a Hubble flow record used for graph construction}
+\label{tab:flow_schema}
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Field} & \textbf{Type} & \textbf{Description} \\
+\midrule
+\texttt{source.pod\_name} & string & Source pod name \\
+\texttt{source.namespace} & string & Source namespace \\
+\texttt{destination.pod\_name} & string & Destination pod name \\
+\texttt{destination.namespace} & string & Destination namespace \\
+\texttt{l4.tcp/udp.destination\_port} & int & Destination port \\
+\texttt{traffic\_direction} & enum & INGRESS / EGRESS \\
+\texttt{verdict} & enum & FORWARDED / DROPPED / AUDIT \\
+\texttt{summary} & string & L7 summary (HTTP method, DNS query) \\
+\texttt{time} & timestamp & Flow event timestamp \\
+\texttt{reply} & bool & Whether this is a reply flow \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Augmentation with Kubernetes Metrics}
+
+Pod-level resource metrics (CPU usage, memory usage, network I/O) are collected from the
+Kubernetes Metrics Server and Prometheus node-exporter, providing additional node features
+for graph construction.
+
+% ─────────────────────────────────────────────
+\section{Phase 2: Dynamic Graph Construction}
+\label{sec:design_phase2}
+
+\subsection{Graph Topology}
+
+The communication graph $G_t = (V_t, E_t, X_t, E\!F_t)$ is defined at each time window $t$ as:
+
+\begin{itemize}
+  \item $V_t$: Set of active pods and services observed in the window.
+  \item $E_t$: Set of directed edges $(u, v)$ where pod $u$ communicated with pod $v$.
+  \item $X_t \in \mathbb{R}^{|V_t| \times d_n}$: Node feature matrix.
+  \item $EF_t \in \mathbb{R}^{|E_t| \times d_e}$: Edge feature matrix.
+\end{itemize}
+
+\subsection{Node Feature Vector ($d_n = 7$)}
+
+\begin{table}[H]
+\centering
+\caption{Node (pod) feature vector components}
+\label{tab:node_features}
+\begin{tabular}{lll}
+\toprule
+\textbf{Feature} & \textbf{Source} & \textbf{Rationale} \\
+\midrule
+Request rate (req/s)        & Hubble flows      & Core volumetric indicator \\
+Error rate (\%)             & Hubble verdicts   & Service degradation signal \\
+Bytes received/s            & Hubble flows      & Bandwidth consumption \\
+Bytes sent/s                & Hubble flows      & Amplification indicator \\
+In-degree (active)          & Graph structure   & Number of incoming connections \\
+Out-degree (active)         & Graph structure   & Number of outgoing connections \\
+CPU utilisation (\%)        & Metrics Server    & Resource exhaustion indicator \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Edge Feature Vector ($d_e = 5$)}
+
+\begin{table}[H]
+\centering
+\caption{Edge (flow) feature vector components}
+\label{tab:edge_features}
+\begin{tabular}{lll}
+\toprule
+\textbf{Feature} & \textbf{Source} & \textbf{Rationale} \\
+\midrule
+Flow count (window)         & Hubble flows      & Connection frequency \\
+Total bytes                 & Hubble flows      & Traffic volume \\
+Protocol (one-hot)          & Hubble flows      & Protocol anomalies \\
+Verdict ratio (drop/fwd)    & Hubble verdicts   & Policy violations \\
+Packet size variance        & Hubble flows      & Unusual packet patterns \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Sliding Window Strategy}
+
+Graphs are constructed using a sliding window of $\Delta t = 30$ seconds with a step size
+of $s = 10$ seconds (75\% overlap). This provides:
+\begin{itemize}
+  \item Temporal resolution sufficient for detecting rapid volumetric attacks.
+  \item Sufficient data per window for graph construction with low-traffic microservices.
+  \item Manageable graph update frequency for the GNN inference pipeline.
+\end{itemize}
+
+% ─────────────────────────────────────────────
+\section{Phase 3: Graph-Based Anomaly Detection}
+\label{sec:design_phase3}
+
+\subsection{Detection Architecture}
+
+The detection engine comprises two stages:
+
+\begin{enumerate}
+  \item \textbf{Stage 1 — Unsupervised Baseline (GAE):} A Graph Autoencoder trained
+  exclusively on normal traffic snapshots. At inference time, high reconstruction error
+  indicates anomalous graph structure or node features. This stage requires no labelled
+  attack data.
+
+  \item \textbf{Stage 2 — Supervised Classifier (GraphSAGE):} After generating labelled
+  attack traffic in the testbed, a GraphSAGE node classifier is trained to distinguish
+  attack types (volumetric, low-and-slow, application-layer). This stage provides
+  fine-grained attack type identification.
+\end{enumerate}
+
+\subsection{Anomaly Score Computation}
+
+For each graph snapshot $G_t$, the anomaly score for each node $v$ is computed as:
+
+\begin{equation}
+  s_v = \alpha \cdot \underbrace{\|\mathbf{x}_v - \hat{\mathbf{x}}_v\|_2}_{\text{feature reconst. error}}
+       + (1-\alpha) \cdot \underbrace{\|\mathbf{A}_v - \hat{\mathbf{A}}_v\|_2}_{\text{structural reconst. error}}
+\end{equation}
+
+where $\hat{\mathbf{x}}_v$ and $\hat{\mathbf{A}}_v$ are the GAE reconstructions of
+node features and adjacency, and $\alpha \in [0,1]$ balances feature vs. structural
+anomaly weighting. The graph-level anomaly score is:
+
+\begin{equation}
+  S_G = \max_{v \in V} s_v
+\end{equation}
+
+\subsection{Threshold Calibration}
+
+The detection threshold $\tau$ is set using the 99th percentile of anomaly scores on
+held-out normal traffic: $\tau = \text{Percentile}_{99}(s_v \mid \text{normal})$.
+An alert is raised when $s_v > \tau$ for any node $v$, with node identity preserved
+for targeted mitigation.
+
+% ─────────────────────────────────────────────
+\section{Phase 4: Adaptive Mitigation Controller}
+\label{sec:design_phase4}
+
+\subsection{Tiered Response Policy}
+
+The mitigation controller translates per-node anomaly scores into a tiered response:
+
+\begin{table}[H]
+\centering
+\caption{Tiered mitigation response policy}
+\label{tab:mitigation_tiers}
+\begin{tabular}{cclc}
+\toprule
+\textbf{Tier} & \textbf{Score Range} & \textbf{Action} & \textbf{Enforcement} \\
+\midrule
+0 (Normal)     & $s_v < \tau$           & No action          & — \\
+1 (Caution)    & $\tau \le s_v < 2\tau$ & Soft rate limit ($-25\%$ bandwidth) & TC eBPF \\
+2 (Warning)    & $2\tau \le s_v < 3\tau$& Hard rate limit ($-75\%$ bandwidth) & TC eBPF \\
+3 (Critical)   & $s_v \ge 3\tau$        & Selective block + alert operator    & XDP + NetworkPolicy \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Enforcement Mechanisms}
+
+\begin{description}
+  \item[TC eBPF Rate Limiter:] A BPF program attached at the TC egress hook of each
+  suspicious pod's veth interface implements a token-bucket rate limiter. The bucket
+  refill rate is dynamically adjusted based on the anomaly score tier.
+
+  \item[CiliumNetworkPolicy:] For Tier 3 alerts, the controller updates the
+  \texttt{CiliumNetworkPolicy} for the affected pod, adding deny rules for the
+  specific source IP or pod label responsible for the attack.
+
+  \item[HPA Suppression Signal:] An annotation is added to the target deployment to
+  suppress horizontal pod autoscaling during the attack, preventing cost amplification.
+\end{description}
+
+\subsection{Recovery Mechanism}
+
+After $T_{recovery} = 60$ seconds of anomaly scores below $\tau$, the mitigation
+controller removes rate-limiting rules and restores normal \texttt{CiliumNetworkPolicy}.
+This prevents indefinite blocking of recovered services.
+
+% ─────────────────────────────────────────────
+\section{Deployment Architecture}
+\label{sec:design_deployment}
+
+\sys{} components are deployed as standard Kubernetes resources:
+
+\begin{itemize}
+  \item \textbf{Cilium + Hubble:} Installed via Helm as the cluster CNI.
+  \item \textbf{Graph Builder:} Python \texttt{Deployment} consuming the Hubble gRPC stream.
+  \item \textbf{GNN Detector:} Python \texttt{Deployment} (PyTorch + PyG) running inference
+  on graph snapshots received from the Graph Builder via a shared message queue.
+  \item \textbf{Mitigation Controller:} Python \texttt{Deployment} consuming anomaly scores
+  and issuing Kubernetes API calls and eBPF program updates via \texttt{bpftool}.
+  \item \textbf{Monitoring Stack:} Prometheus + Grafana \texttt{Deployment}s for metrics
+  and dashboards.
+\end{itemize}
+
+% ─────────────────────────────────────────────
+\section{Summary}
+This chapter has presented the first-cut design of \sys{}, covering all four phases of the
+pipeline with sufficient technical detail to guide implementation. Key design decisions
+(use of Cilium/Hubble over raw eBPF, sliding-window graph construction, GAE+GraphSAGE
+detection stages, tiered mitigation) have been justified with reference to the literature
+review. Chapter~\ref{ch:implementation} will describe the implementation of each
+component in detail.

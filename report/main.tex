@@ -1,0 +1,172 @@
+%% ============================================================
+%%  FYP Report — Kubernetes-Native DDoS Defense Framework
+%%  Main Entry Point
+%%  Compile with: pdflatex → biber → pdflatex → pdflatex
+%% ============================================================
+
+\documentclass[12pt, a4paper, oneside]{report}
+
+%% ── Core Packages ──────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[a4paper, margin=2.5cm]{geometry}
+\usepackage{microtype}           % Better text rendering
+\usepackage{setspace}
+\onehalfspacing                  % 1.5x line spacing (most universities require this)
+
+%% ── Fonts ──────────────────────────────────────────────────
+\usepackage{helvet}              % Arial-like sans-serif (use for headings if desired)
+% \renewcommand{\familydefault}{\sfdefault}  % Uncomment to use sans-serif throughout
+
+%% ── Mathematics ────────────────────────────────────────────
+\usepackage{amsmath, amssymb, amsthm}
+
+%% ── Graphics & Figures ─────────────────────────────────────
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage[dvipsnames,svgnames,x11names]{xcolor}
+\graphicspath{{figures/}}
+
+%% ── Tables ─────────────────────────────────────────────────
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{makecell}
+
+%% ── Code Listings ──────────────────────────────────────────
+\usepackage{listings}
+\usepackage{lstautogobble}
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.97,0.97,0.97}
+
+\lstdefinestyle{mystyle}{
+  backgroundcolor=\color{backcolour},
+  commentstyle=\color{codegreen},
+  keywordstyle=\color{blue}\bfseries,
+  numberstyle=\tiny\color{codegray},
+  stringstyle=\color{codepurple},
+  basicstyle=\ttfamily\small,
+  breakatwhitespace=false,
+  breaklines=true,
+  captionpos=b,
+  keepspaces=true,
+  numbers=left,
+  numbersep=5pt,
+  showspaces=false,
+  showstringspaces=false,
+  showtabs=false,
+  tabsize=2,
+  autogobble=true,
+  frame=single,
+  rulecolor=\color{gray!30}
+}
+\lstset{style=mystyle}
+
+%% ── Diagrams ───────────────────────────────────────────────
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, calc, backgrounds}
+
+%% ── Algorithms ─────────────────────────────────────────────
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+
+%% ── References & Links ─────────────────────────────────────
+\usepackage[style=ieee, backend=biber, sorting=none, maxbibnames=6]{biblatex}
+\addbibresource{references.bib}
+
+\usepackage[colorlinks=true,
+            linkcolor=NavyBlue,
+            citecolor=ForestGreen,
+            urlcolor=RoyalBlue,
+            bookmarks=true,
+            pdftitle={Kubernetes-Native DDoS Defense Framework},
+            pdfauthor={Your Name},
+            pdfsubject={FYP Report},
+            pdfkeywords={eBPF, DDoS, Kubernetes, Graph Neural Networks, Anomaly Detection}
+            ]{hyperref}
+\usepackage{cleveref}
+
+%% ── Headings & TOC Style ───────────────────────────────────
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\Huge\bfseries\color{NavyBlue}}
+  {Chapter \thechapter}{10pt}{\Huge}
+\titlespacing*{\chapter}{0pt}{-10pt}{30pt}
+
+\titleformat{\section}{\normalfont\Large\bfseries\color{NavyBlue!80}}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries\color{NavyBlue!60}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalfont\normalsize\bfseries}{\thesubsubsection}{1em}{}
+
+%% ── Page Headers ───────────────────────────────────────────
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\leftmark}
+\fancyhead[R]{\small\thepage}
+\fancyfoot[C]{\small FYP Report — Kubernetes-Native DDoS Defense}
+\renewcommand{\headrulewidth}{0.4pt}
+
+%% ── Acronyms ───────────────────────────────────────────────
+\usepackage[acronym, toc, nopostdot]{glossaries}
+\makeglossaries
+\input{chapters/acronyms}
+
+%% ── Custom Commands ────────────────────────────────────────
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+\newcommand{\note}[1]{\textcolor{orange}{\textit{[Note: #1]}}}
+\newcommand{\keyword}[1]{\textit{#1}}
+\newcommand{\sys}{\textsc{KubeGraph-Shield}}  % Project codename — change as needed
+
+%% ── Theorem Environments ───────────────────────────────────
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[chapter]
+\newtheorem{proposition}{Proposition}[chapter]
+
+%% ============================================================
+%%  DOCUMENT BEGIN
+%% ============================================================
+\begin{document}
+
+%% ── Title Page ─────────────────────────────────────────────
+\input{chapters/titlepage}
+
+%% ── Front Matter ───────────────────────────────────────────
+\pagenumbering{roman}
+\input{chapters/abstract}
+\input{chapters/acknowledgements}
+
+\tableofcontents
+\listoffigures
+\listoftables
+\lstlistoflistings
+
+\printglossary[type=\acronymtype, title=List of Acronyms]
+
+%% ── Main Matter ────────────────────────────────────────────
+\clearpage
+\pagenumbering{arabic}
+
+\input{chapters/ch01_introduction}
+\input{chapters/ch02_background}
+\input{chapters/ch03_literature_review}
+\input{chapters/ch04_design}
+\input{chapters/ch05_implementation}
+\input{chapters/ch06_evaluation}
+\input{chapters/ch07_discussion}
+\input{chapters/ch08_conclusion}
+
+%% ── Back Matter ────────────────────────────────────────────
+\appendix
+\input{chapters/appendix_a}
+\input{chapters/appendix_b}
+
+\printbibliography[heading=bibintoc, title={References}]
+
+\end{document}

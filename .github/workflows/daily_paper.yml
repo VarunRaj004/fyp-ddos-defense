@@ -1,0 +1,67 @@
+name: 📄 Daily Research Paper Reminder (v2 — Semantic Scholar)
+
+on:
+  # ── Runs every day at 9:00 AM IST (03:30 UTC) ────────────────────────────
+  schedule:
+    - cron: "30 3 * * *"
+
+  # ── Also allows manual trigger from GitHub Actions UI ────────────────────
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (print issue but don't create it)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  issues: write        # needed to create/label GitHub Issues
+  contents: write      # needed to commit state.json back to the repo
+
+jobs:
+  suggest-paper:
+    name: Suggest Today's Research Paper
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Check out the repository ──────────────────────────────────────
+      - name: ⬇️ Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      # ── 2. Set up Python ──────────────────────────────────────────────────
+      - name: 🐍 Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      # ── 3. Run the paper selector script ─────────────────────────────────
+      - name: 📄 Select and post today's paper
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          echo "🕘 Running at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "📁 Working directory: $(pwd)"
+          echo "📂 Paper reminder dir contents:"
+          ls -la .github/paper-reminder/
+          python .github/paper-reminder/daily_paper.py
+
+      # ── 4. Commit updated state.json back to repo ─────────────────────────
+      # This tracks which papers have already been suggested
+      - name: 💾 Commit state.json (track shown papers)
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Actions [Paper Reminder]"
+          git add .github/paper-reminder/state.json
+          git diff --staged --quiet || \
+            git commit -m "chore(paper-reminder): update paper state [skip ci]"
+          git push
+        continue-on-error: true  # Don't fail if nothing changed

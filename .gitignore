@@ -1,0 +1,86 @@
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-wheel-metadata/
+.installed.cfg
+lib/
+lib64/
+*.so
+
+# ── Virtual environments ─────────────────────────────────────────────────────
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ── LaTeX build artefacts ────────────────────────────────────────────────────
+report/*.aux
+report/*.bbl
+report/*.bcf
+report/*.blg
+report/*.fdb_latexmk
+report/*.fls
+report/*.log
+report/*.out
+report/*.pdf
+report/*.run.xml
+report/*.synctex.gz
+report/*.toc
+report/*.lof
+report/*.lot
+report/*.lol
+report/*.gls
+report/*.glo
+report/*.glsdefs
+report/*.ist
+report/*.acn
+report/*.acr
+report/*.alg
+report/chapters/*.aux
+report/_minted-*/
+
+# ── OS artefacts ─────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ── Editors ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# ── Secrets (NEVER commit these) ─────────────────────────────────────────────
+.env.local
+.env.*.local
+secrets.json
+*.pem
+*.key
+
+# ── Temporary files ───────────────────────────────────────────────────────────
+*.tmp
+*.temp
+*.bak
+*.orig
+
+# NOTE: state.json IS committed intentionally — it tracks shown papers.
+# Do NOT add state.json here.

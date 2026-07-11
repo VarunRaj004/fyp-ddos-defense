@@ -1,0 +1,33 @@
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+Modern cloud-native applications deployed on Kubernetes face an evolving DDoS threat
+landscape that existing perimeter-focused defenses are ill-equipped to address. Current
+solutions --- whether signature-based filtering, statistical anomaly detection, or
+machine learning classifiers operating on individual network flows --- share a fundamental
+limitation: they treat network traffic as a collection of independent data points, failing
+to model the relational and temporal structure of microservice communication.
+
+This project presents \sys{}, an intelligent, Kubernetes-native DDoS defense framework
+that addresses this gap through three integrated innovations. First, we leverage
+eBPF-based network observability via Cilium and Hubble to collect real-time,
+fine-grained flow telemetry from within the Kubernetes data plane, capturing traffic
+between pods and services with negligible overhead. Second, we construct dynamic
+communication graphs from this telemetry and apply graph-based anomaly detection using
+Graph Autoencoders and GraphSAGE to identify attack patterns in the relational structure
+of microservice interactions. Third, we translate graph anomaly scores into adaptive,
+graduated rate-limiting responses enforced via XDP/TC eBPF programs and dynamic
+CiliumNetworkPolicy updates, preserving legitimate traffic while suppressing attack flows.
+
+Experimental evaluation on a Kubernetes testbed running the Online Boutique benchmark
+application demonstrates that \sys{} effectively detects volumetric, application-layer,
+and low-and-slow DDoS attacks with lower false positive rates than conventional
+flow-based classifiers, while adaptive mitigation reduces attack impact by [X]\% compared
+with static rate limiting. This work contributes a reproducible, open-source prototype
+and a labelled dataset of Kubernetes DDoS scenarios, providing a foundation for future
+research in cloud-native network security.
+
+\bigskip
+\noindent \textbf{Keywords:} eBPF, Kubernetes, DDoS detection, Graph Neural Networks,
+Graph Autoencoder, GraphSAGE, microservices, network security, anomaly detection,
+adaptive rate limiting.

@@ -1,0 +1,203 @@
+%% ============================================================
+%%  Chapter 1 — Introduction
+%% ============================================================
+\chapter{Introduction}
+\label{ch:introduction}
+
+\section{Background and Motivation}
+\label{sec:motivation}
+
+The rapid adoption of cloud-native architectures and container orchestration platforms,
+particularly Kubernetes~\cite{kubernetes2014}, has fundamentally transformed how modern
+applications are designed, deployed, and operated. Microservice architectures, which
+decompose monolithic applications into loosely coupled, independently deployable services,
+have become the dominant paradigm for large-scale distributed systems~\cite{microservices_survey}.
+
+This shift, however, has introduced a complex and evolving threat landscape. Distributed
+Denial of Service (DDoS) attacks remain one of the most pervasive and economically
+damaging classes of network attacks~\cite{cloudflare_threat_report_2024}. In cloud-native
+environments, the challenge is compounded because attack traffic can originate from within
+the cluster itself (compromised pods), traverse encrypted service mesh tunnels, and exploit
+the dynamic, ephemeral nature of containerised workloads.
+
+Existing DDoS defense mechanisms operate predominantly at the network edge ---
+inspecting individual packets, computing statistical flow features, or applying
+signature-based filters~\cite{aws_shield, cloudflare_magic_transit}. While effective
+against volumetric floods, these approaches share a fundamental blind spot: they
+\emph{treat traffic as a collection of independent flows} rather than as the product of an
+interconnected system of communicating services. Consequently, they fail to model the
+relational and temporal structure of microservice communication, limiting their ability to
+detect sophisticated, low-and-slow, and application-layer attacks that mimic legitimate
+traffic behaviour.
+
+Recent advances in \emph{eBPF (Extended Berkeley Packet Filter)}~\cite{gregg2019bpf}
+have enabled unprecedented observability into kernel-level network events with near-zero
+overhead, providing a foundation for fine-grained, in-cluster telemetry. Simultaneously,
+\emph{Graph Neural Networks (GNNs)}~\cite{zhou2020gnn_survey} have emerged as a powerful
+paradigm for learning on relational data, demonstrating strong performance in
+fraud detection, social network analysis, and network intrusion detection tasks.
+
+This project proposes to bridge these two advances: leveraging eBPF-based telemetry from
+within a Kubernetes cluster to construct \emph{dynamic communication graphs} of
+microservice interactions, and applying graph-based anomaly detection to identify DDoS
+attack patterns that are invisible to traditional, flow-centric approaches.
+
+% ─────────────────────────────────────────────
+\section{Problem Statement}
+\label{sec:problem}
+
+The core problem addressed by this research is:
+
+\begin{quote}
+\textit{How can the relational structure of Kubernetes microservice communication be
+modelled and analysed in real time to detect and mitigate sophisticated DDoS attacks
+that evade conventional, feature-based detection systems?}
+\end{quote}
+
+Specifically, the following limitations of existing solutions motivate this work:
+
+\begin{enumerate}
+  \item \textbf{Flat traffic analysis:} Existing ML-based detection systems (e.g., Random
+  Forest~\cite{rf_ddos}, XGBoost~\cite{xgboost_ids}) extract features from individual
+  flows, discarding the relational context between communicating endpoints.
+
+  \item \textbf{Limited intra-cluster visibility:} Industry solutions such as Cloudflare
+  and AWS Shield operate at the network perimeter and cannot observe encrypted, internal
+  pod-to-pod traffic within a Kubernetes cluster.
+
+  \item \textbf{Static mitigation policies:} Rate limiting and traffic scrubbing rules are
+  typically static and threshold-based, leading to either excessive false positives during
+  legitimate traffic spikes or insufficient protection against slow, stealthy attacks.
+
+  \item \textbf{No graph-aware Kubernetes security:} Prior work on graph-based IDS
+  (e.g., E-GraphSAGE~\cite{lo2022egraphsage}) applies GNNs to IP-flow graphs rather than
+  to Kubernetes service topology graphs, missing the structural context of
+  orchestrator-managed communication.
+\end{enumerate}
+
+% ─────────────────────────────────────────────
+\section{Research Questions}
+\label{sec:rqs}
+
+This project is guided by the following research questions:
+
+\begin{description}
+  \item[\textbf{RQ1}] How can eBPF-based network observability and dynamic graph modelling
+  be combined to accurately represent microservice communication patterns in a Kubernetes
+  environment?
+
+  \item[\textbf{RQ2}] How effectively can graph-based anomaly detection --- using
+  techniques such as Graph Autoencoders and GraphSAGE --- identify sophisticated DDoS
+  attacks, including low-and-slow and application-layer variants, compared with
+  conventional traffic-based detection methods?
+
+  \item[\textbf{RQ3}] How can adaptive rate limiting, driven by graph-derived anomaly
+  scores, improve DDoS mitigation effectiveness while minimising resource consumption and
+  impact on legitimate users?
+\end{description}
+
+% ─────────────────────────────────────────────
+\section{Research Objectives}
+\label{sec:objectives}
+
+To answer the above questions, this project pursues the following objectives:
+
+\begin{description}
+  \item[\textbf{RO1}] Develop a Kubernetes-native monitoring framework using eBPF and
+  graph modelling to capture and represent microservice communication patterns in real time.
+
+  \item[\textbf{RO2}] Design, implement, and evaluate a graph-based anomaly detection
+  model capable of detecting volumetric and sophisticated DDoS attacks in Kubernetes
+  environments.
+
+  \item[\textbf{RO3}] Develop and evaluate an adaptive rate-limiting mechanism that
+  utilises graph-derived anomaly scores to selectively throttle suspicious traffic while
+  preserving legitimate service availability.
+\end{description}
+
+% ─────────────────────────────────────────────
+\section{Proposed Approach}
+\label{sec:approach}
+
+The proposed solution, named \sys{}, is a four-phase pipeline:
+
+\begin{enumerate}
+  \item \textbf{Observe:} Deploy eBPF probes via Cilium~\cite{cilium} and export
+  real-time network flow telemetry from the Kubernetes data plane using the Hubble
+  observability layer~\cite{hubble}.
+
+  \item \textbf{Model:} Construct sliding-window dynamic graphs where nodes represent
+  pods and services, and edges encode communication metadata (throughput, latency,
+  connection count, error rate).
+
+  \item \textbf{Detect:} Apply a Graph Autoencoder (GAE)~\cite{kipf2016vgae} trained on
+  normal communication patterns; high reconstruction error signals anomalous behaviour.
+  A GraphSAGE~\cite{hamilton2017graphsage} classifier is subsequently trained to
+  discriminate attack sub-types.
+
+  \item \textbf{Mitigate:} Use anomaly scores to drive an adaptive mitigation controller
+  that enforces dynamic rate limits via XDP/TC eBPF programs and updates
+  \texttt{CiliumNetworkPolicy} resources, without resorting to indiscriminate traffic
+  dropping.
+\end{enumerate}
+
+% ─────────────────────────────────────────────
+\section{Expected Contributions}
+\label{sec:contributions}
+
+This project makes the following expected contributions:
+
+\begin{enumerate}
+  \item A novel \textbf{eBPF-powered graph construction framework} for real-time
+  modelling of Kubernetes microservice communication.
+
+  \item A \textbf{graph-based anomaly detection pipeline} that captures relational and
+  temporal attack signatures invisible to flow-based detectors.
+
+  \item An \textbf{adaptive, score-driven mitigation controller} that replaces static
+  rate-limiting thresholds with dynamic, per-service enforcement policies.
+
+  \item A \textbf{reproducible experimental evaluation} on a Kubernetes testbed,
+  including a labelled dataset of simulated DDoS scenarios against microservice workloads.
+
+  \item An open-source prototype suitable for further academic research and potential
+  deployment in cloud-native security pipelines.
+\end{enumerate}
+
+% ─────────────────────────────────────────────
+\section{Scope and Limitations}
+\label{sec:scope}
+
+The project focuses on Linux-based Kubernetes clusters using eBPF-capable kernels
+(v5.8+). The experimental evaluation is conducted on a simulated testbed rather than
+production infrastructure. Encrypted application-layer payloads are not inspected;
+detection relies solely on network flow metadata observable at the kernel level. The
+framework is evaluated against selected DDoS attack types and does not claim comprehensive
+coverage of all attack vectors.
+
+% ─────────────────────────────────────────────
+\section{Report Structure}
+\label{sec:structure}
+
+The remainder of this report is organised as follows:
+
+\begin{itemize}
+  \item \textbf{Chapter~\ref{ch:background}} provides background on Kubernetes networking,
+  eBPF, graph theory fundamentals, and GNN architectures.
+
+  \item \textbf{Chapter~\ref{ch:literature}} presents the literature review, analysing
+  related work across eBPF security, DDoS detection, and graph-based anomaly detection.
+
+  \item \textbf{Chapter~\ref{ch:design}} presents the system architecture and first-cut
+  design of \sys{}.
+
+  \item \textbf{Chapter~\ref{ch:implementation}} describes the implementation in detail.
+
+  \item \textbf{Chapter~\ref{ch:evaluation}} presents the experimental methodology and
+  results.
+
+  \item \textbf{Chapter~\ref{ch:discussion}} discusses findings, limitations, and future
+  directions.
+
+  \item \textbf{Chapter~\ref{ch:conclusion}} summarises the project contributions.
+\end{itemize}
