@@ -1,33 +1,27 @@
 #!/usr/bin/env python3
 """
-daily_paper.py  (v2 — Hybrid: Semantic Scholar API + Curated fallback)
------------------------------------------------------------------------
+daily_paper.py  (v3 — Semantic Scholar API + Gmail Email + GitHub Issue)
+------------------------------------------------------------------------
 
-HOW PAPER SELECTION WORKS (read this!):
-========================================
-
+HOW PAPER SELECTION WORKS:
+============================
   MODE A — Live Discovery (Semantic Scholar API)
-  ───────────────────────────────────────────────
-  1. Sends search queries to the FREE Semantic Scholar Academic Graph API
-     (same paper database as ResearchGate, but with an open REST API)
-  2. Rotates through 10 topic-specific query strings relevant to the FYP
-  3. Each query returns up to 30 candidate papers
-  4. Candidates are SCORED on four axes:
-       • Relevance  — does the title/abstract match your FYP keywords?
-       • Recency    — newer papers score higher (2020–2025 preferred)
-       • Impact     — citation count (log-scaled so 1 paper ≠ all results)
-       • Novelty    — has this paper been shown before? (penalised if yes)
-  5. The highest-scoring paper is selected and posted as a GitHub Issue
-
+    1. Searches api.semanticscholar.org with a rotating FYP-specific query
+    2. Scores candidates on: Relevance (45%) + Recency (25%) + Impact (20%) + Novelty (10%)
+    3. Picks the top-scoring unseen paper
   MODE B — Curated Fallback (papers.json)
-  ─────────────────────────────────────────
-  If the API is unreachable (network error, rate limit), the script falls back
-  to the hand-curated list in papers.json — weighted by your priority ratings
-  (MUST-READ papers appear 4× more often than MEDIUM papers)
+    Falls back to the 30 hand-curated papers if the API is unavailable.
 
-  DEDUPLICATION
-  ─────────────
-  state.json tracks every paper (by DOI or title hash) that has been shown.
+  OUTPUT: Sends a rich HTML email AND creates a GitHub Issue.
+
+Environment variables (set as GitHub Actions Secrets):
+  GITHUB_TOKEN        — auto-injected by GitHub Actions
+  GITHUB_REPOSITORY   — auto-injected by GitHub Actions
+  GMAIL_USER          — your Gmail address (sender)
+  GMAIL_APP_PASSWORD  — Gmail App Password (NOT your login password)
+  RECIPIENT_EMAIL     — where to deliver the daily paper email
+
+Deduplication: state.json tracks shown papers by DOI / title hash.
   A paper is never repeated until ALL available papers have been suggested.
   After a full cycle, state.json resets and the cycle counter increments.
 
@@ -640,6 +634,382 @@ def create_issue(repo: str, title: str, body: str, labels: list[str]) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  EMAIL — HTML BUILDER
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def build_email_html(paper: dict, state: dict, issue_url: str = "") -> str:
+    """Render a rich dark-themed HTML email for the daily paper."""
+
+    today     = datetime.date.today().strftime("%A, %d %B %Y")
+    total     = state.get("total_shown", 0) + 1
+    cycle     = state.get("cycle", 0) + 1
+    category  = paper.get("category", "Research Paper")
+    priority  = paper.get("priority", "MEDIUM")
+    source    = paper.get("source", "curated")
+
+    # ── Priority colours & labels ──
+    priority_cfg = {
+        "MUST-READ": ("#ef4444", "#fef2f2", "MUST READ TODAY"),
+        "HIGH":      ("#f97316", "#fff7ed", "HIGH PRIORITY"),
+        "MEDIUM":    ("#eab308", "#fefce8", "MEDIUM PRIORITY"),
+        "LOW":       ("#22c55e", "#f0fdf4", "LOW PRIORITY"),
+    }
+    p_color, p_bg, p_label = priority_cfg.get(priority, ("#6366f1", "#eef2ff", priority))
+
+    # ── Category colour ──
+    cat_colors = {
+        "eBPF & XDP":               "#7c3aed",
+        "Graph Neural Networks":    "#059669",
+        "Graph ML for Security":    "#0891b2",
+        "DDoS Detection":           "#dc2626",
+        "Microservice & Kubernetes":"#2563eb",
+        "Research Methodology":     "#d97706",
+        "Discovered Paper":         "#7c3aed",
+    }
+    cat_color = cat_colors.get(category, "#6366f1")
+
+    # ── Source badge ──
+    if source == "semantic_scholar":
+        source_html = (
+            f'<span style="background:#1e3a5f;color:#60a5fa;padding:3px 10px;'
+            f'border-radius:20px;font-size:11px;font-weight:600;letter-spacing:1px;">'
+            f'LIVE DISCOVERY &bull; Semantic Scholar</span>'
+        )
+        score_html = (
+            f'<p style="color:#94a3b8;font-size:12px;margin:6px 0 0;">'
+            f'Relevance Score: <strong style="color:#60a5fa;">{paper.get("score", "?")}</strong>&nbsp;&nbsp;'
+            f'Query: <em style="color:#7dd3fc;">{paper.get("query", "")}</em></p>'
+        )
+    else:
+        source_html = (
+            f'<span style="background:#1e3a5f;color:#818cf8;padding:3px 10px;'
+            f'border-radius:20px;font-size:11px;font-weight:600;letter-spacing:1px;">'
+            f'CURATED READING LIST</span>'
+        )
+        score_html = ""
+
+    # ── Abstract / TL;DR ──
+    abstract = paper.get("tldr") or paper.get("abstract") or ""
+    if len(abstract) > 400:
+        abstract = abstract[:400] + "&hellip;"
+
+    # ── Key findings (curated papers) ──
+    findings_html = ""
+    if paper.get("key_findings"):
+        items = "".join(
+            f'<li style="margin:6px 0;color:#cbd5e1;">{f}</li>'
+            for f in paper["key_findings"]
+        )
+        findings_html = f"""
+        <div style="margin:24px 0;">
+          <h3 style="color:#f1f5f9;font-size:14px;text-transform:uppercase;
+                     letter-spacing:1px;margin:0 0 12px;">Key Findings</h3>
+          <ul style="margin:0;padding-left:20px;">{items}</ul>
+        </div>"""
+
+    # ── Project relevance ──
+    relevance_html = ""
+    if paper.get("project_relevance"):
+        relevance_html = f"""
+        <div style="margin:24px 0;background:#0f2744;border-left:4px solid {cat_color};
+                    border-radius:0 8px 8px 0;padding:16px 20px;">
+          <h3 style="color:#60a5fa;font-size:13px;text-transform:uppercase;
+                     letter-spacing:1px;margin:0 0 8px;">Why Read This For Your FYP</h3>
+          <p style="color:#cbd5e1;font-size:14px;line-height:1.7;margin:0;">
+            {paper['project_relevance']}
+          </p>
+        </div>"""
+
+    # ── Reading focus ──
+    focus_html = ""
+    if paper.get("reading_focus"):
+        focus_html = f"""
+        <div style="margin:24px 0;background:#1a1a2e;border-radius:8px;padding:16px 20px;">
+          <h3 style="color:#a78bfa;font-size:13px;text-transform:uppercase;
+                     letter-spacing:1px;margin:0 0 8px;">Reading Focus</h3>
+          <p style="color:#c4b5fd;font-size:14px;line-height:1.7;margin:0;font-style:italic;">
+            {paper['reading_focus']}
+          </p>
+        </div>"""
+
+    # ── Links row ──
+    link_btns = []
+    btn_style = (
+        "display:inline-block;padding:10px 20px;border-radius:6px;"
+        "font-size:13px;font-weight:600;text-decoration:none;margin:4px;"
+    )
+    if paper.get("pdf"):
+        link_btns.append(
+            f'<a href="{paper["pdf"]}" style="{btn_style}background:#7c3aed;color:#fff;">'
+            f'Free PDF</a>'
+        )
+    if paper.get("arxiv"):
+        link_btns.append(
+            f'<a href="{paper["arxiv"]}" style="{btn_style}background:#0891b2;color:#fff;">'
+            f'arXiv</a>'
+        )
+    if paper.get("url") and str(paper["url"]).startswith("http"):
+        link_btns.append(
+            f'<a href="{paper["url"]}" style="{btn_style}background:#1e40af;color:#fff;">'
+            f'Publisher</a>'
+        )
+    if paper.get("s2_url"):
+        link_btns.append(
+            f'<a href="{paper["s2_url"]}" style="{btn_style}background:#065f46;color:#fff;">'
+            f'Semantic Scholar</a>'
+        )
+    if issue_url:
+        link_btns.append(
+            f'<a href="{issue_url}" style="{btn_style}background:#374151;color:#fff;">'
+            f'GitHub Issue</a>'
+        )
+    if not link_btns:
+        link_btns.append(
+            f'<a href="https://www.semanticscholar.org/search?q={urllib.parse.quote(paper["title"])}"
+            f'   style="{btn_style}background:#374151;color:#fff;">Search on Semantic Scholar</a>'
+        )
+    links_row = "".join(link_btns)
+
+    # ── Checklist ──
+    checklist_items = [
+        "Read the abstract and introduction",
+        "Study the sections highlighted in Reading Focus above",
+        "Note 2-3 ways this differs from your project (for Related Work)",
+        "Add BibTeX entry to <code>references.bib</code>",
+        "Add 1-2 sentences to <code>ch03_literature_review.tex</code>",
+        "Update <code>weekly_progress.md</code> — Master Paper Reading List",
+    ]
+    checklist_html = "".join(
+        f'<div style="display:flex;align-items:flex-start;margin:10px 0;">'
+        f'<span style="width:20px;height:20px;border:2px solid #374151;border-radius:4px;'
+        f'display:inline-block;flex-shrink:0;margin-right:12px;margin-top:1px;"></span>'
+        f'<span style="color:#cbd5e1;font-size:14px;line-height:1.5;">{item}</span></div>'
+        for item in checklist_items
+    )
+
+    # ── Citation count ──
+    citations = paper.get("citations")
+    cite_html = (
+        f'<span style="color:#94a3b8;font-size:13px;">&bull; {citations:,} citations</span>'
+        if citations else ""
+    )
+
+    # ── Authors + venue ──
+    authors = paper.get("authors", "Unknown")
+    venue   = paper.get("venue", "")
+    year    = paper.get("year", "")
+
+    html = f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Daily Research Paper - {today}</title>
+</head>
+<body style="margin:0;padding:0;background:#0d1117;font-family:'Segoe UI',Arial,sans-serif;">
+
+  <!-- Outer wrapper -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background:#0d1117;min-height:100vh;">
+  <tr><td align="center" style="padding:32px 16px;">
+
+    <!-- Card -->
+    <table width="620" cellpadding="0" cellspacing="0" border="0"
+           style="max-width:620px;width:100%;background:#161b22;
+                  border-radius:16px;overflow:hidden;
+                  box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+
+      <!-- Header gradient bar -->
+      <tr><td style="background:linear-gradient(135deg,{cat_color} 0%,#1e1b4b 100%);
+                     padding:32px 36px 28px;">
+        <p style="margin:0 0 10px;color:rgba(255,255,255,0.6);font-size:12px;
+                  text-transform:uppercase;letter-spacing:2px;">FYP Daily Paper Reminder</p>
+        <p style="margin:0 0 4px;color:#fff;font-size:22px;font-weight:700;
+                  line-height:1.3;">{paper['title']}</p>
+        <p style="margin:12px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">
+          {today} &nbsp;&bull;&nbsp; Paper #{total} &nbsp;&bull;&nbsp; Cycle #{cycle}
+        </p>
+      </td></tr>
+
+      <!-- Priority + Source badges -->
+      <tr><td style="background:#1c2128;padding:14px 36px;border-bottom:1px solid #30363d;">
+        <span style="background:{p_color};color:#fff;padding:4px 14px;
+                     border-radius:20px;font-size:11px;font-weight:700;
+                     text-transform:uppercase;letter-spacing:1px;">
+          {p_label}
+        </span>
+        &nbsp;&nbsp;
+        {source_html}
+        {score_html}
+      </td></tr>
+
+      <!-- Body -->
+      <tr><td style="padding:28px 36px;">
+
+        <!-- Meta table -->
+        <table width="100%" cellpadding="6" cellspacing="0" border="0"
+               style="background:#0d1117;border-radius:8px;margin-bottom:24px;">
+          <tr>
+            <td style="color:#6b7280;font-size:12px;text-transform:uppercase;
+                       letter-spacing:1px;padding:8px 14px;border-bottom:1px solid #1f2937;
+                       width:30%;">Authors</td>
+            <td style="color:#e5e7eb;font-size:13px;padding:8px 14px;
+                       border-bottom:1px solid #1f2937;">{authors}</td>
+          </tr>
+          <tr>
+            <td style="color:#6b7280;font-size:12px;text-transform:uppercase;
+                       letter-spacing:1px;padding:8px 14px;border-bottom:1px solid #1f2937;">Venue</td>
+            <td style="color:#e5e7eb;font-size:13px;padding:8px 14px;
+                       border-bottom:1px solid #1f2937;">{venue}</td>
+          </tr>
+          <tr>
+            <td style="color:#6b7280;font-size:12px;text-transform:uppercase;
+                       letter-spacing:1px;padding:8px 14px;">Year</td>
+            <td style="color:#e5e7eb;font-size:13px;padding:8px 14px;">
+              {year} &nbsp;{cite_html}
+            </td>
+          </tr>
+        </table>
+
+        <!-- TL;DR / Abstract -->
+        <div style="margin:0 0 24px;">
+          <h3 style="color:#f1f5f9;font-size:14px;text-transform:uppercase;
+                     letter-spacing:1px;margin:0 0 12px;">
+            <span style="color:{cat_color};">&#9654;</span> TL;DR
+          </h3>
+          <p style="color:#cbd5e1;font-size:15px;line-height:1.8;margin:0;
+                    background:#0d1117;border-left:3px solid {cat_color};
+                    border-radius:0 6px 6px 0;padding:14px 18px;font-style:italic;">
+            {abstract if abstract else 'No abstract available — check the paper directly.'}
+          </p>
+        </div>
+
+        {findings_html}
+        {relevance_html}
+        {focus_html}
+
+        <!-- Links -->
+        <div style="margin:24px 0;text-align:center;">
+          <h3 style="color:#f1f5f9;font-size:14px;text-transform:uppercase;
+                     letter-spacing:1px;margin:0 0 14px;">Read the Paper</h3>
+          {links_row}
+        </div>
+
+        <!-- Divider -->
+        <hr style="border:none;border-top:1px solid #30363d;margin:28px 0;">
+
+        <!-- Checklist -->
+        <div style="margin:0 0 24px;">
+          <h3 style="color:#f1f5f9;font-size:14px;text-transform:uppercase;
+                     letter-spacing:1px;margin:0 0 16px;">Today's Reading Checklist</h3>
+          {checklist_html}
+        </div>
+
+        <!-- Divider -->
+        <hr style="border:none;border-top:1px solid #30363d;margin:28px 0;">
+
+        <!-- Category tag -->
+        <p style="text-align:center;margin:0;">
+          <span style="background:{cat_color}22;color:{cat_color};
+                       padding:6px 16px;border-radius:20px;
+                       font-size:12px;font-weight:600;letter-spacing:1px;">
+            {category.upper()}
+          </span>
+        </p>
+
+      </td></tr>
+
+      <!-- Footer -->
+      <tr><td style="background:#0d1117;padding:20px 36px;
+                     border-top:1px solid #30363d;text-align:center;">
+        <p style="margin:0;color:#6b7280;font-size:12px;line-height:1.8;">
+          FYP Daily Paper Reminder &bull; Kubernetes-Native DDoS Defense Framework<br>
+          Powered by Semantic Scholar Academic Graph API &bull; GitHub Actions<br>
+          <span style="color:#374151;">You receive this because GitHub Actions delivers it daily at 9:00 AM IST</span>
+        </p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+  </table>
+</body>
+</html>"""
+    return html
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  EMAIL — SMTP SENDER
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def send_email(paper: dict, state: dict, issue_url: str = "") -> bool:
+    """
+    Send the daily paper as a rich HTML email via Gmail SMTP.
+
+    Required environment variables:
+      GMAIL_USER          — sender Gmail address
+      GMAIL_APP_PASSWORD  — Gmail App Password (Settings > Security > App passwords)
+      RECIPIENT_EMAIL     — destination address (can be same as GMAIL_USER)
+    """
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text      import MIMEText
+
+    gmail_user  = os.environ.get("GMAIL_USER", "").strip()
+    gmail_pass  = os.environ.get("GMAIL_APP_PASSWORD", "").strip()
+    recipient   = os.environ.get("RECIPIENT_EMAIL", "").strip() or gmail_user
+
+    if not gmail_user or not gmail_pass:
+        print("[EMAIL] GMAIL_USER or GMAIL_APP_PASSWORD not set — skipping email")
+        return False
+
+    today    = datetime.date.today().strftime("%A, %d %B %Y")
+    priority = paper.get("priority", "MEDIUM")
+    icon     = {"MUST-READ": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}.get(priority, "📄")
+    subject  = f"{icon} [{today}] FYP Paper: {paper['title'][:60]}"
+
+    html_body = build_email_html(paper, state, issue_url)
+
+    # Plain-text fallback
+    text_body = (
+        f"FYP Daily Research Paper — {today}\n"
+        f"{'='*60}\n\n"
+        f"Title:   {paper['title']}\n"
+        f"Authors: {paper.get('authors', 'Unknown')}\n"
+        f"Venue:   {paper.get('venue', '')} ({paper.get('year', '')})\n"
+        f"Category: {paper.get('category', '')} | Priority: {priority}\n\n"
+        f"TL;DR:\n{paper.get('tldr') or paper.get('abstract', 'N/A')}\n\n"
+        f"Links:\n"
+        + (f"  PDF:    {paper['pdf']}\n"    if paper.get('pdf')    else "")
+        + (f"  arXiv:  {paper['arxiv']}\n"  if paper.get('arxiv')  else "")
+        + (f"  Paper:  {paper['url']}\n"    if paper.get('url')    else "")
+        + (f"  Issue:  {issue_url}\n"       if issue_url            else "")
+        + f"\n{'='*60}\n"
+        + f"Powered by Semantic Scholar API + GitHub Actions\n"
+    )
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"]    = f"FYP Paper Reminder <{gmail_user}>"
+    msg["To"]      = recipient
+    msg.attach(MIMEText(text_body, "plain",  "utf-8"))
+    msg.attach(MIMEText(html_body, "html",   "utf-8"))
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(gmail_user, gmail_pass)
+            smtp.sendmail(gmail_user, [recipient], msg.as_string())
+        print(f"[EMAIL] Sent to {recipient} — subject: {subject[:60]}")
+        return True
+    except smtplib.SMTPAuthenticationError:
+        print("[EMAIL] Authentication failed — check GMAIL_USER and GMAIL_APP_PASSWORD")
+        return False
+    except Exception as e:
+        print(f"[EMAIL] Error: {type(e).__name__}: {e}")
+        return False
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -652,39 +1022,45 @@ def main():
     state = load_state()
     state["last_run_date"] = datetime.date.today().isoformat()
 
-    # ── Try live discovery first ──
+    # ── 1. Select paper ──────────────────────────────────────────────────────
     print("[INFO] Attempting live discovery via Semantic Scholar...")
     paper = select_from_semantic_scholar(state)
 
     if paper:
-        print(f"[INFO] Mode: LIVE DISCOVERY (Semantic Scholar)")
+        print("[INFO] Mode: LIVE DISCOVERY (Semantic Scholar)")
     else:
-        print(f"[INFO] Mode: CURATED FALLBACK (papers.json)")
+        print("[INFO] Mode: CURATED FALLBACK (papers.json)")
         paper = select_from_curated(state)
 
-    # ── Format and post ──
+    print(f"\n{'='*60}")
+    print(f"  Title: {paper['title'][:70]}")
+    print(f"  Year:  {paper.get('year','?')}  |  Priority: {paper.get('priority','?')}")
+    print(f"{'='*60}\n")
+
+    # ── 2. Post GitHub Issue ─────────────────────────────────────────────────
     title  = format_issue_title(paper)
     body   = format_issue_body(paper, state)
     labels = build_labels(paper)
-
-    print(f"\n{'='*60}")
-    print(f"Title: {title}")
-    print(f"Labels: {labels}")
-    print(f"{'='*60}\n")
-
     ensure_labels(repo)
     issue_url = create_issue(repo, title, body, labels)
-    print(f"[OK] Issue created: {issue_url}")
+    print(f"[OK] GitHub Issue: {issue_url}")
 
-    # ── Update state ──
+    # ── 3. Send HTML email ───────────────────────────────────────────────────
+    email_sent = send_email(paper, state, issue_url)
+    if not email_sent:
+        print("[WARN] Email not sent — check GMAIL_USER / GMAIL_APP_PASSWORD secrets")
+
+    # ── 4. Update state ──────────────────────────────────────────────────────
     shown = state.get("shown_ids", [])
-    pid = paper["_id"]
+    pid   = paper["_id"]
     if pid not in shown:
         shown.append(pid)
     state["shown_ids"]   = shown
     state["total_shown"] = state.get("total_shown", 0) + 1
     save_state(state)
-    print(f"[INFO] State: {len(shown)} papers shown total (cycle #{state['cycle']+1})")
+    print(f"[INFO] State updated — {len(shown)} papers shown (cycle #{state['cycle']+1})")
+    print(f"[INFO] Email: {'SENT' if email_sent else 'SKIPPED (no credentials)'}")
+    print(f"[INFO] Done.")
 
 
 if __name__ == "__main__":

@@ -1,67 +1,64 @@
-name: 📄 Daily Research Paper Reminder (v2 — Semantic Scholar)
+name: 📄 Daily Research Paper Reminder (v3 — Email + GitHub Issue)
 
 on:
   # ── Runs every day at 9:00 AM IST (03:30 UTC) ────────────────────────────
   schedule:
     - cron: "30 3 * * *"
 
-  # ── Also allows manual trigger from GitHub Actions UI ────────────────────
+  # ── Manual trigger from GitHub Actions UI ────────────────────────────────
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Dry run (print issue but don't create it)"
+        description: "Dry run (select paper but do NOT send email or create issue)"
         required: false
         default: "false"
         type: choice
-        options:
-          - "false"
-          - "true"
+        options: ["false", "true"]
 
 permissions:
-  issues: write        # needed to create/label GitHub Issues
-  contents: write      # needed to commit state.json back to the repo
+  issues: write      # create GitHub Issues
+  contents: write    # commit state.json back to repo
 
 jobs:
   suggest-paper:
-    name: Suggest Today's Research Paper
+    name: Select Paper → Send Email → Create Issue
     runs-on: ubuntu-latest
 
     steps:
-      # ── 1. Check out the repository ──────────────────────────────────────
-      - name: ⬇️ Checkout repository
+      # ── 1. Checkout ───────────────────────────────────────────────────────
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 1
 
-      # ── 2. Set up Python ──────────────────────────────────────────────────
-      - name: 🐍 Set up Python 3.12
+      # ── 2. Python ─────────────────────────────────────────────────────────
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
 
-      # ── 3. Run the paper selector script ─────────────────────────────────
-      - name: 📄 Select and post today's paper
+      # ── 3. Run the script ─────────────────────────────────────────────────
+      - name: Run daily paper script
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          # GitHub (auto-injected)
+          GITHUB_TOKEN:       ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY:  ${{ github.repository }}
+          # Email (set these in repo Settings → Secrets and variables → Actions)
+          GMAIL_USER:         ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          RECIPIENT_EMAIL:    ${{ secrets.RECIPIENT_EMAIL }}
         run: |
-          echo "🕘 Running at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-          echo "📁 Working directory: $(pwd)"
-          echo "📂 Paper reminder dir contents:"
-          ls -la .github/paper-reminder/
+          echo "Running at: $(date -u '+%Y-%m-%d %H:%M:%S UTC') = 9:00 AM IST"
           python .github/paper-reminder/daily_paper.py
 
-      # ── 4. Commit updated state.json back to repo ─────────────────────────
-      # This tracks which papers have already been suggested
-      - name: 💾 Commit state.json (track shown papers)
+      # ── 4. Commit state.json ──────────────────────────────────────────────
+      - name: Save state (track shown papers)
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Actions [Paper Reminder]"
           git add .github/paper-reminder/state.json
           git diff --staged --quiet || \
-            git commit -m "chore(paper-reminder): update paper state [skip ci]"
+            git commit -m "chore(paper-reminder): update state.json [skip ci]"
           git push
-        continue-on-error: true  # Don't fail if nothing changed
+        continue-on-error: true
