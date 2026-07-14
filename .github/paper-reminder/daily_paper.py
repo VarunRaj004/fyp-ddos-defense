@@ -55,6 +55,48 @@ S2_FIELDS     = "title,authors,year,venue,externalIds,abstract,citationCount,ope
 S2_LIMIT      = 30      # papers fetched per query
 API_TIMEOUT   = 15      # seconds
 
+# ResearchGate URL patterns
+# Direct paper URL (when DOI known):  https://www.researchgate.net/publication/<doi>
+# Search fallback:                    https://www.researchgate.net/search?q=<title>
+RG_BASE = "https://www.researchgate.net"
+
+
+def rg_url(paper: dict) -> str:
+    """
+    Build the best available ResearchGate URL for a paper.
+
+    ResearchGate has no public API, but two URL patterns always work:
+      1. Direct DOI link  — researchgate.net/publication/<doi>  (most reliable)
+      2. Title search     — researchgate.net/search?q=<title>   (fallback)
+
+    DOI is taken from: paper["doi"], paper["externalIds"]["DOI"],
+    or extracted from paper["url"] if it contains doi.org.
+    """
+    # Try to find a DOI from any field
+    doi = (
+        paper.get("doi")
+        or (paper.get("externalIds") or {}).get("DOI")
+    )
+    if not doi and paper.get("url"):
+        # Handle multiple publisher DOI URL patterns:
+        #   https://doi.org/10.xxxx/yyyy
+        #   https://dl.acm.org/doi/10.xxxx/yyyy
+        #   https://doi.org/10.xxxx/yyyy
+        #   https://ieeexplore.ieee.org/document/... (no DOI in URL — skip)
+        import re
+        url_str = str(paper.get("url", ""))
+        m = re.search(r"(?:doi\.org|/doi)/(" + r"10\.\d{4,}[^\s\"'<>]+)", url_str)
+        if m:
+            doi = m.group(1).rstrip("/")
+
+    if doi:
+        # ResearchGate accepts DOI directly in the publication path
+        return f"{RG_BASE}/publication/{urllib.parse.quote(doi.strip(), safe='')}"
+
+    # Fallback: search by title
+    title = paper.get("title", "")
+    return f"{RG_BASE}/search?q={urllib.parse.quote(title)}"
+
 # FYP-specific search queries — rotated daily (one per day of week + more)
 # These are carefully chosen to stay on-topic for the project
 SEARCH_QUERIES = [
@@ -758,15 +800,16 @@ def build_email_html(paper: dict, state: dict, issue_url: str = "") -> str:
             f'<a href="{paper["s2_url"]}" style="{btn_style}background:#065f46;color:#fff;">'
             f'Semantic Scholar</a>'
         )
+    # ResearchGate — always present (DOI direct link or title search fallback)
+    rg = rg_url(paper)
+    link_btns.append(
+        f'<a href="{rg}" style="{btn_style}background:#00aaff;color:#fff;">'
+        f'ResearchGate</a>'
+    )
     if issue_url:
         link_btns.append(
             f'<a href="{issue_url}" style="{btn_style}background:#374151;color:#fff;">'
             f'GitHub Issue</a>'
-        )
-    if not link_btns:
-        link_btns.append(
-            f'<a href="https://www.semanticscholar.org/search?q={urllib.parse.quote(paper["title"])}"
-            f'   style="{btn_style}background:#374151;color:#fff;">Search on Semantic Scholar</a>'
         )
     links_row = "".join(link_btns)
 
