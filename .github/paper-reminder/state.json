@@ -1,9 +1,10 @@
 {
   "shown_ids": [
     "curated:23",
-    "curated:28"
+    "curated:28",
+    "curated:6"
   ],
   "cycle": 0,
-  "total_shown": 2,
-  "last_run_date": "2026-07-14"
+  "total_shown": 3,
+  "last_run_date": "2026-07-15"
 }
