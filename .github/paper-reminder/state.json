@@ -28,9 +28,10 @@
     "curated:8",
     "curated:19",
     "curated:27",
-    "doi:10.1109/noms57970.2025.11073712"
+    "doi:10.1109/noms57970.2025.11073712",
+    "curated:22"
   ],
   "cycle": 0,
-  "total_shown": 29,
-  "last_run_date": "2026-08-10"
+  "total_shown": 30,
+  "last_run_date": "2026-08-11"
 }
