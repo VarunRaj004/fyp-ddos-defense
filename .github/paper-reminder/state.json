@@ -1,38 +1,8 @@
 {
   "shown_ids": [
-    "curated:23",
-    "curated:28",
-    "curated:6",
-    "curated:9",
-    "curated:13",
-    "curated:25",
-    "curated:10",
-    "curated:20",
-    "curated:4",
-    "curated:24",
-    "curated:14",
-    "curated:7",
-    "curated:5",
-    "curated:3",
-    "curated:1",
-    "curated:15",
-    "curated:2",
-    "curated:16",
-    "curated:17",
-    "curated:30",
-    "curated:11",
-    "curated:18",
-    "curated:29",
-    "curated:12",
-    "curated:21",
-    "curated:8",
-    "curated:19",
-    "curated:27",
-    "doi:10.1109/noms57970.2025.11073712",
-    "curated:22",
-    "curated:26"
+    "curated:1"
   ],
-  "cycle": 0,
-  "total_shown": 31,
-  "last_run_date": "2026-08-12"
+  "cycle": 1,
+  "total_shown": 32,
+  "last_run_date": "2026-08-13"
 }
