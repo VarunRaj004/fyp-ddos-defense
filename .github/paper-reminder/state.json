@@ -1,37 +1,8 @@
 {
   "shown_ids": [
-    "curated:1",
-    "curated:9",
-    "curated:22",
-    "curated:3",
-    "curated:6",
-    "curated:7",
-    "curated:13",
-    "curated:28",
-    "curated:10",
-    "curated:19",
-    "curated:5",
-    "curated:2",
-    "curated:29",
-    "curated:4",
-    "curated:12",
-    "curated:25",
-    "curated:30",
-    "curated:16",
-    "curated:8",
-    "curated:15",
-    "curated:21",
-    "curated:27",
-    "curated:26",
-    "curated:17",
-    "curated:20",
-    "curated:18",
-    "curated:14",
-    "curated:11",
-    "curated:24",
-    "curated:23"
+    "curated:3"
   ],
-  "cycle": 1,
-  "total_shown": 61,
-  "last_run_date": "2026-09-11"
+  "cycle": 2,
+  "total_shown": 62,
+  "last_run_date": "2026-09-12"
 }
