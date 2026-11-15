@@ -2,9 +2,10 @@
   "shown_ids": [
     "curated:11",
     "curated:1",
-    "doi:10.3390/electronics14020229"
+    "doi:10.3390/electronics14020229",
+    "curated:4"
   ],
   "cycle": 4,
-  "total_shown": 124,
-  "last_run_date": "2026-11-14"
+  "total_shown": 125,
+  "last_run_date": "2026-11-15"
 }
